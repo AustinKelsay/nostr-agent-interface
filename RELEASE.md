@@ -11,7 +11,7 @@ This document outlines the release process for `nostr-agent-interface`.
 3. Confirm `CHANGELOG.md` has an accurate `[Unreleased]` section.
 4. Confirm docs still reflect project positioning: Nostr Agent Interface extends Nostr MCP Server, preserves JARC contracts, prefers CLI/API for operations, and keeps MCP as supported compatibility mode.
 
-### 1. Run Pre-release Checks
+### 1. Run Prerelease Checks
 
 ```bash
 bun run prerelease
@@ -70,7 +70,7 @@ npm publish
 2. Minor (`0.X.0`): new capabilities, non-breaking
 3. Major (`X.0.0`): breaking contract changes
 
-## Pre-release Checklist
+## Prerelease Checklist
 
 - [ ] `staging` includes intended release commits
 - [ ] tests pass (`bun test`)
