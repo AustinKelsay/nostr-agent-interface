@@ -1,0 +1,1710 @@
+{
+  "schemaVersion": 1,
+  "package": {
+    "name": "nostr-agent-interface",
+    "version": "3.0.0"
+  },
+  "toolCount": 40,
+  "tools": [
+    {
+      "name": "analyzeNip19",
+      "description": "Analyze any NIP-19 entity or hex string to understand its type and contents",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "type": "string",
+            "description": "The NIP-19 entity or hex string to analyze"
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "convertNip19",
+      "description": "Convert any NIP-19 entity (npub, nsec, note, nprofile, nevent, naddr) to another format",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "type": "string",
+            "description": "The NIP-19 entity or hex string to convert"
+          },
+          "targetType": {
+            "type": "string",
+            "enum": [
+              "npub",
+              "nsec",
+              "note",
+              "hex",
+              "nprofile",
+              "nevent",
+              "naddr"
+            ],
+            "description": "The target format to convert to"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional relay URLs for complex entities (nprofile, nevent, naddr)"
+          },
+          "author": {
+            "type": "string",
+            "description": "Optional author pubkey (hex format) for nevent/naddr"
+          },
+          "kind": {
+            "type": "number",
+            "description": "Optional event kind for nevent/naddr"
+          },
+          "identifier": {
+            "type": "string",
+            "description": "Required identifier for naddr conversion"
+          }
+        },
+        "required": [
+          "input",
+          "targetType"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "createKeypair",
+      "description": "Generate a new Nostr keypair",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "both",
+              "hex",
+              "npub"
+            ],
+            "default": "both",
+            "description": "Format to return keys in: hex only, npub only, or both"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "createNostrEvent",
+      "description": "Create an unsigned Nostr event of any kind (requires pubkey or privateKey to derive pubkey)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Event kind"
+          },
+          "content": {
+            "type": "string",
+            "default": "",
+            "description": "Event content"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Optional tags to include with the event"
+          },
+          "createdAt": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional created_at timestamp (unix seconds)"
+          },
+          "pubkey": {
+            "type": "string",
+            "description": "Author public key (hex pubkey, npub, or nprofile). Provide this OR privateKey."
+          },
+          "privateKey": {
+            "type": "string",
+            "description": "Private key (hex or nsec) to derive pubkey. Provide this OR pubkey."
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "createNote",
+      "description": "Create a new kind 1 note event (unsigned)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Private key to sign the note with (hex format or nsec format)"
+          },
+          "content": {
+            "type": "string",
+            "description": "Content of the note to create"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Optional tags to include with the note"
+          }
+        },
+        "required": [
+          "privateKey",
+          "content"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "createProfile",
+      "description": "Create a new Nostr profile (kind 0 event)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Private key to sign the profile with (hex format or nsec format)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name for the profile"
+          },
+          "about": {
+            "type": "string",
+            "description": "About/bio text for the profile"
+          },
+          "picture": {
+            "type": "string",
+            "description": "URL to profile picture"
+          },
+          "nip05": {
+            "type": "string",
+            "description": "NIP-05 identifier (like email@domain.com)"
+          },
+          "lud16": {
+            "type": "string",
+            "description": "Lightning address for receiving payments"
+          },
+          "lud06": {
+            "type": "string",
+            "description": "LNURL for receiving payments"
+          },
+          "website": {
+            "type": "string",
+            "description": "Personal website URL"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to publish to"
+          }
+        },
+        "required": [
+          "privateKey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "decryptDmNip44",
+      "description": "Decrypt a NIP-17 gift wrapped DM (kind 1059) to reveal the inner kind 14 rumor",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Receiver private key (hex or nsec)"
+          },
+          "giftWrapEvent": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "pubkey": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "number"
+              },
+              "kind": {
+                "type": "number"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "content": {
+                "type": "string"
+              },
+              "sig": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "pubkey",
+              "created_at",
+              "kind",
+              "tags",
+              "content",
+              "sig"
+            ],
+            "additionalProperties": false,
+            "description": "The kind 1059 gift wrap event to decrypt"
+          }
+        },
+        "required": [
+          "privateKey",
+          "giftWrapEvent"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "decryptNip04",
+      "description": "Decrypt ciphertext using NIP-04 (AES-CBC) for direct messages",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Recipient private key (hex or nsec)"
+          },
+          "senderPubkey": {
+            "type": "string",
+            "description": "Sender public key (hex or npub)"
+          },
+          "ciphertext": {
+            "type": "string",
+            "description": "Encrypted content (NIP-04 format: <cipher>?iv=<iv>)"
+          }
+        },
+        "required": [
+          "privateKey",
+          "senderPubkey",
+          "ciphertext"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "decryptNip44",
+      "description": "Decrypt ciphertext using NIP-44 (ChaCha20 + HMAC)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Recipient private key (hex or nsec)"
+          },
+          "senderPubkey": {
+            "type": "string",
+            "description": "Sender public key (hex or npub)"
+          },
+          "ciphertext": {
+            "type": "string",
+            "description": "Encrypted content (NIP-44 base64 payload)"
+          }
+        },
+        "required": [
+          "privateKey",
+          "senderPubkey",
+          "ciphertext"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "deleteEvent",
+      "description": "Delete one or more events (kind 5 deletion request)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Private key (hex or nsec) for the deleting account"
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "Target event ids (hex, note, or nevent) to delete"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Optional deletion reason"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to publish to"
+          }
+        },
+        "required": [
+          "privateKey",
+          "targets"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "encryptNip04",
+      "description": "Encrypt plaintext using NIP-04 (AES-CBC) for direct messages",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Sender private key (hex or nsec)"
+          },
+          "recipientPubkey": {
+            "type": "string",
+            "description": "Recipient public key (hex or npub)"
+          },
+          "plaintext": {
+            "type": "string",
+            "description": "Message to encrypt"
+          }
+        },
+        "required": [
+          "privateKey",
+          "recipientPubkey",
+          "plaintext"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "encryptNip44",
+      "description": "Encrypt plaintext using NIP-44 (ChaCha20 + HMAC)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Sender private key (hex or nsec)"
+          },
+          "recipientPubkey": {
+            "type": "string",
+            "description": "Recipient public key (hex or npub)"
+          },
+          "plaintext": {
+            "type": "string",
+            "description": "Message to encrypt"
+          },
+          "version": {
+            "type": "integer",
+            "description": "Optional NIP-44 version to use for encryption (snstr default if omitted)"
+          }
+        },
+        "required": [
+          "privateKey",
+          "recipientPubkey",
+          "plaintext"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "follow",
+      "description": "Follow a pubkey by updating your contact list (kind 3)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Private key (hex or nsec) for the account that will follow"
+          },
+          "targetPubkey": {
+            "type": "string",
+            "description": "Pubkey to follow (hex or npub)"
+          },
+          "relayHint": {
+            "type": "string",
+            "description": "Optional relay hint to store alongside the contact (ws:// or wss://)"
+          },
+          "petname": {
+            "type": "string",
+            "description": "Optional petname/alias for this contact"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query/publish to"
+          }
+        },
+        "required": [
+          "privateKey",
+          "targetPubkey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "getAllZaps",
+      "description": "Get all zaps (sent and received) for a public key",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pubkey": {
+            "type": "string",
+            "description": "Public key of the Nostr user (hex format or npub format)"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20,
+            "description": "Maximum number of total zaps to fetch"
+          },
+          "since": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional start timestamp (unix seconds)"
+          },
+          "until": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional end timestamp (unix seconds)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
+          },
+          "validateReceipts": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to validate zap receipts according to NIP-57"
+          },
+          "debug": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable verbose debug logging"
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "getContactList",
+      "description": "Get a user's contact list (kind 3) and followed pubkeys",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pubkey": {
+            "type": "string",
+            "description": "Public key of the Nostr user (hex format or npub format)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "getDmConversationNip04",
+      "description": "Fetch and optionally decrypt a NIP-04 DM conversation (kind 4) between you and a peer",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Your private key (hex or nsec) for decrypting the conversation"
+          },
+          "peerPubkey": {
+            "type": "string",
+            "description": "Peer public key (hex or npub)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
+          },
+          "authPrivateKey": {
+            "type": "string",
+            "description": "Optional private key (hex or nsec) used to AUTH (NIP-42) if relays require it"
+          },
+          "since": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional start timestamp (unix seconds)"
+          },
+          "until": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional end timestamp (unix seconds)"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "default": 50,
+            "description": "Maximum number of messages to return"
+          },
+          "decrypt": {
+            "type": "boolean",
+            "default": true,
+            "description": "If true, decrypt and return plaintext content"
+          }
+        },
+        "required": [
+          "privateKey",
+          "peerPubkey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "getDmInboxNip44",
+      "description": "Fetch and decrypt your NIP-44 DM inbox (NIP-17 gift wraps, kind 1059)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Your private key (hex or nsec) to decrypt your inbox"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
+          },
+          "authPrivateKey": {
+            "type": "string",
+            "description": "Optional private key (hex or nsec) used to AUTH (NIP-42) if relays require it"
+          },
+          "since": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional start timestamp (unix seconds)"
+          },
+          "until": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional end timestamp (unix seconds)"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "default": 25,
+            "description": "Maximum number of gift wrap events to fetch/decrypt"
+          }
+        },
+        "required": [
+          "privateKey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "getFollowing",
+      "description": "Get pubkeys a user is following (alias of getContactList)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pubkey": {
+            "type": "string",
+            "description": "Public key of the Nostr user (hex format or npub format)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "getKind1Notes",
+      "description": "Get text notes (kind 1) by public key",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pubkey": {
+            "type": "string",
+            "description": "Public key of the Nostr user (hex format or npub format)"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 10,
+            "description": "Maximum number of notes to fetch"
+          },
+          "since": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional start timestamp (unix seconds)"
+          },
+          "until": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional end timestamp (unix seconds)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "getLongFormNotes",
+      "description": "Get long-form notes (kind 30023) by public key",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pubkey": {
+            "type": "string",
+            "description": "Public key of the Nostr user (hex format or npub format)"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 10,
+            "description": "Maximum number of notes to fetch"
+          },
+          "since": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional start timestamp (unix seconds)"
+          },
+          "until": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional end timestamp (unix seconds)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "getProfile",
+      "description": "Get a Nostr profile by public key",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pubkey": {
+            "type": "string",
+            "description": "Public key of the Nostr user (hex format or npub format)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "getReceivedZaps",
+      "description": "Get zaps received by a public key",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pubkey": {
+            "type": "string",
+            "description": "Public key of the Nostr user (hex format or npub format)"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 10,
+            "description": "Maximum number of zaps to fetch"
+          },
+          "since": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional start timestamp (unix seconds)"
+          },
+          "until": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional end timestamp (unix seconds)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
+          },
+          "validateReceipts": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to validate zap receipts according to NIP-57"
+          },
+          "debug": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable verbose debug logging"
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "getRelayList",
+      "description": "Get a user's relay list metadata (NIP-65 kind 10002)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pubkey": {
+            "type": "string",
+            "description": "Public key of the Nostr user (hex format or npub format)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
+          },
+          "authPrivateKey": {
+            "type": "string",
+            "description": "Optional private key (hex or nsec) used to AUTH (NIP-42) if relays require it"
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "getSentZaps",
+      "description": "Get zaps sent by a public key",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pubkey": {
+            "type": "string",
+            "description": "Public key of the Nostr user (hex format or npub format)"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 10,
+            "description": "Maximum number of zaps to fetch"
+          },
+          "since": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional start timestamp (unix seconds)"
+          },
+          "until": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional end timestamp (unix seconds)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
+          },
+          "validateReceipts": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to validate zap receipts according to NIP-57"
+          },
+          "debug": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable verbose debug logging"
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "postAnonymousNote",
+      "description": "Post an anonymous note to the Nostr network using a temporary keypair",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Content of the note to post"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to publish to"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Optional tags to include with the note"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "postNote",
+      "description": "Post a note using an existing private key (authenticated posting)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Private key to sign the note with (hex format or nsec format)"
+          },
+          "content": {
+            "type": "string",
+            "description": "Content of the note to post"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Optional tags to include with the note"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to publish to"
+          }
+        },
+        "required": [
+          "privateKey",
+          "content"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "publishNostrEvent",
+      "description": "Publish a signed Nostr event to relays",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to publish to"
+          },
+          "authPrivateKey": {
+            "type": "string",
+            "description": "Optional private key (hex or nsec) used to AUTH to relays that require NIP-42"
+          },
+          "signedEvent": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Event ID"
+              },
+              "pubkey": {
+                "type": "string",
+                "description": "Author pubkey"
+              },
+              "created_at": {
+                "type": "number",
+                "description": "Creation timestamp"
+              },
+              "kind": {
+                "type": "number",
+                "description": "Event kind"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "description": "Tags array"
+              },
+              "content": {
+                "type": "string",
+                "description": "Event content"
+              },
+              "sig": {
+                "type": "string",
+                "description": "Event signature"
+              }
+            },
+            "required": [
+              "id",
+              "pubkey",
+              "created_at",
+              "kind",
+              "tags",
+              "content",
+              "sig"
+            ],
+            "additionalProperties": false,
+            "description": "Signed event to publish"
+          }
+        },
+        "required": [
+          "signedEvent"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "publishNote",
+      "description": "Publish a signed note to Nostr relays",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "signedNote": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Event ID"
+              },
+              "pubkey": {
+                "type": "string",
+                "description": "Public key of the author"
+              },
+              "created_at": {
+                "type": "number",
+                "description": "Creation timestamp"
+              },
+              "kind": {
+                "type": "number",
+                "description": "Event kind"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "description": "Tags array"
+              },
+              "content": {
+                "type": "string",
+                "description": "Content of the note"
+              },
+              "sig": {
+                "type": "string",
+                "description": "Event signature"
+              }
+            },
+            "required": [
+              "id",
+              "pubkey",
+              "created_at",
+              "kind",
+              "tags",
+              "content",
+              "sig"
+            ],
+            "additionalProperties": false,
+            "description": "Signed note event to publish"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to publish to"
+          }
+        },
+        "required": [
+          "signedNote"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "queryEvents",
+      "description": "Query Nostr events using a generic filter (kinds/authors/ids/tags/timestamps)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
+          },
+          "authPrivateKey": {
+            "type": "string",
+            "description": "Optional private key (hex or nsec) used to AUTH to relays that require NIP-42"
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Optional list of event kinds"
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of authors (hex pubkeys, npub, or nprofile)"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of event ids (64-hex, note, or nevent)"
+          },
+          "since": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional start timestamp (unix seconds)"
+          },
+          "until": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional end timestamp (unix seconds)"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "default": 25,
+            "description": "Maximum number of events to fetch"
+          },
+          "tags": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Optional tag filters, e.g. { p: [pubkey], e: [eventId], t: [hashtag] }"
+          },
+          "search": {
+            "type": "string",
+            "description": "Optional NIP-50 search string (relay support varies)"
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "reactToEvent",
+      "description": "React to an event (kind 7)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Private key (hex or nsec) for the reacting account"
+          },
+          "target": {
+            "type": "string",
+            "description": "Target event id (hex, note, or nevent)"
+          },
+          "reaction": {
+            "type": "string",
+            "default": "+",
+            "description": "Reaction content, typically '+' or '-' (or an emoji)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query/publish to"
+          }
+        },
+        "required": [
+          "privateKey",
+          "target"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "replyToEvent",
+      "description": "Reply to an event with correct NIP-10 thread tags (kind 1)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Private key (hex or nsec) for the replying account"
+          },
+          "target": {
+            "type": "string",
+            "description": "Target event id being replied to (hex, note, or nevent)"
+          },
+          "content": {
+            "type": "string",
+            "description": "Reply text content"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Optional additional tags to include"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query/publish to"
+          }
+        },
+        "required": [
+          "privateKey",
+          "target",
+          "content"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "repostEvent",
+      "description": "Repost an event (kind 6)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Private key (hex or nsec) for the reposting account"
+          },
+          "target": {
+            "type": "string",
+            "description": "Target event id (hex, note, or nevent)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query/publish to"
+          }
+        },
+        "required": [
+          "privateKey",
+          "target"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "sendAnonymousZap",
+      "description": "Prepare an anonymous zap to a profile or event",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "description": "Target to zap - can be a pubkey (hex or npub) or an event ID (nevent, note, naddr, or hex)"
+          },
+          "amountSats": {
+            "type": "number",
+            "minimum": 1,
+            "description": "Amount to zap in satoshis"
+          },
+          "comment": {
+            "type": "string",
+            "default": "",
+            "description": "Optional comment to include with the zap"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
+          }
+        },
+        "required": [
+          "target",
+          "amountSats"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "sendDmNip04",
+      "description": "Send a NIP-04 encrypted DM (kind 4)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Sender private key (hex or nsec)"
+          },
+          "recipientPubkey": {
+            "type": "string",
+            "description": "Recipient public key (hex or npub)"
+          },
+          "content": {
+            "type": "string",
+            "description": "Plaintext message content"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to publish to"
+          },
+          "authPrivateKey": {
+            "type": "string",
+            "description": "Optional private key (hex or nsec) used to AUTH (NIP-42) if relays require it"
+          },
+          "createdAt": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional created_at timestamp (unix seconds)"
+          }
+        },
+        "required": [
+          "privateKey",
+          "recipientPubkey",
+          "content"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "sendDmNip44",
+      "description": "Send a NIP-44 encrypted DM using NIP-17 gift wrap (kind 1059)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Sender private key (hex or nsec)"
+          },
+          "recipientPubkey": {
+            "type": "string",
+            "description": "Recipient public key (hex or npub)"
+          },
+          "content": {
+            "type": "string",
+            "description": "Plaintext message content"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to publish to"
+          },
+          "authPrivateKey": {
+            "type": "string",
+            "description": "Optional private key (hex or nsec) used to AUTH (NIP-42) if relays require it"
+          }
+        },
+        "required": [
+          "privateKey",
+          "recipientPubkey",
+          "content"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "setRelayList",
+      "description": "Publish your relay list metadata (NIP-65 kind 10002)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Private key (hex or nsec) for the account publishing the relay list"
+          },
+          "relayList": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "description": "Relay URL (ws:// or wss://)"
+                },
+                "read": {
+                  "type": "boolean",
+                  "description": "Whether this relay should be used for reads (default true if both read/write omitted)"
+                },
+                "write": {
+                  "type": "boolean",
+                  "description": "Whether this relay should be used for writes (default true if both read/write omitted)"
+                }
+              },
+              "required": [
+                "url"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Relay list entries to publish in kind 10002"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to publish to"
+          }
+        },
+        "required": [
+          "privateKey",
+          "relayList"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "signNostrEvent",
+      "description": "Sign an unsigned Nostr event with a private key",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Private key to sign the event with (hex format or nsec format)"
+          },
+          "event": {
+            "type": "object",
+            "properties": {
+              "pubkey": {
+                "type": "string",
+                "description": "Author pubkey (hex)"
+              },
+              "created_at": {
+                "type": "number",
+                "description": "Creation timestamp"
+              },
+              "kind": {
+                "type": "number",
+                "description": "Event kind"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "description": "Tags array"
+              },
+              "content": {
+                "type": "string",
+                "description": "Event content"
+              }
+            },
+            "required": [
+              "pubkey",
+              "created_at",
+              "kind",
+              "tags",
+              "content"
+            ],
+            "additionalProperties": false,
+            "description": "Unsigned event to sign"
+          }
+        },
+        "required": [
+          "privateKey",
+          "event"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "signNote",
+      "description": "Sign a note event with a private key",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Private key to sign the note with (hex format or nsec format)"
+          },
+          "noteEvent": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "number",
+                "description": "Event kind (should be 1 for text notes)"
+              },
+              "content": {
+                "type": "string",
+                "description": "Content of the note"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "description": "Tags array"
+              },
+              "created_at": {
+                "type": "number",
+                "description": "Creation timestamp"
+              },
+              "pubkey": {
+                "type": "string",
+                "description": "Public key of the author"
+              }
+            },
+            "required": [
+              "kind",
+              "content",
+              "tags",
+              "created_at",
+              "pubkey"
+            ],
+            "additionalProperties": false,
+            "description": "Unsigned note event to sign"
+          }
+        },
+        "required": [
+          "privateKey",
+          "noteEvent"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "unfollow",
+      "description": "Unfollow a pubkey by updating your contact list (kind 3)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Private key (hex or nsec) for the account that will unfollow"
+          },
+          "targetPubkey": {
+            "type": "string",
+            "description": "Pubkey to unfollow (hex or npub)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query/publish to"
+          }
+        },
+        "required": [
+          "privateKey",
+          "targetPubkey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "updateProfile",
+      "description": "Update an existing Nostr profile (kind 0 event)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Private key to sign the profile with (hex format or nsec format)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name for the profile"
+          },
+          "about": {
+            "type": "string",
+            "description": "About/bio text for the profile"
+          },
+          "picture": {
+            "type": "string",
+            "description": "URL to profile picture"
+          },
+          "nip05": {
+            "type": "string",
+            "description": "NIP-05 identifier (like email@domain.com)"
+          },
+          "lud16": {
+            "type": "string",
+            "description": "Lightning address for receiving payments"
+          },
+          "lud06": {
+            "type": "string",
+            "description": "LNURL for receiving payments"
+          },
+          "website": {
+            "type": "string",
+            "description": "Personal website URL"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to publish to"
+          }
+        },
+        "required": [
+          "privateKey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    }
+  ]
+}
