@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Reframed project documentation around Nostr Agent Interface as an extension of Nostr MCP Server, with CLI/API as preferred operational interfaces and MCP retained as supported compatibility mode.
+- Updated release/process/docs guidance and package metadata links to point to `nostr-agent-interface` repository coordinates.
+
+### Added
+- Added lineage and transport metadata to generated `artifacts/tools.json` so downstream consumers can identify interface intent and preferred transports.
+
 ## [3.0.0] - 2026-02-13
 
 ### Added

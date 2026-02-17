@@ -1941,7 +1941,7 @@ export async function startMcpStdioServer(): Promise<void> {
   const server = createNostrMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Nostr MCP Server running on stdio");
+  console.error("Nostr Agent Interface (MCP mode) running on stdio");
 }
 
 function attachProcessHandlers() {

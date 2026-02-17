@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "nostr-mcp-server",
+      "name": "nostr-agent-interface",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.11.0",
         "@noble/curves": "^1.8.2",

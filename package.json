@@ -1,7 +1,7 @@
 {
   "name": "nostr-agent-interface",
   "version": "3.0.0",
-  "description": "Nostr capabilities exposed equally via MCP, CLI, and HTTP API",
+  "description": "API/CLI-first Nostr agent interface with optional MCP compatibility",
   "main": "build/index.js",
   "type": "module",
   "bin": {
@@ -30,6 +30,9 @@
   ],
   "keywords": [
     "nostr",
+    "agent-interface",
+    "cli",
+    "api",
     "mcp",
     "model-context-protocol",
     "claude",
@@ -38,12 +41,12 @@
   "author": "Austin Kelsay <austinkelsay@protonmail.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AustinKelsay/nostr-mcp-server.git"
+    "url": "git+https://github.com/AustinKelsay/nostr-agent-interface.git"
   },
   "bugs": {
-    "url": "https://github.com/AustinKelsay/nostr-mcp-server/issues"
+    "url": "https://github.com/AustinKelsay/nostr-agent-interface/issues"
   },
-  "homepage": "https://github.com/AustinKelsay/nostr-mcp-server#readme",
+  "homepage": "https://github.com/AustinKelsay/nostr-agent-interface#readme",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.0",

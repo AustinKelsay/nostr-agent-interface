@@ -4,6 +4,19 @@
     "name": "nostr-agent-interface",
     "version": "3.0.0"
   },
+  "interface": {
+    "project": "Nostr Agent Interface",
+    "lineage": "Extends Nostr MCP Server and preserves its core JARC tool contracts",
+    "preferredTransports": [
+      "cli",
+      "api"
+    ],
+    "supportedTransports": [
+      "mcp",
+      "cli",
+      "api"
+    ]
+  },
   "toolCount": 40,
   "tools": [
     {

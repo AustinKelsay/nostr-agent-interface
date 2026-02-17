@@ -893,7 +893,7 @@ export async function prepareAnonymousZap(
         lnurlResponse = await fetch(lnurl, {
           headers: {
             'Accept': 'application/json',
-            'User-Agent': 'Nostr-MCP-Server/1.0'
+            'User-Agent': 'Nostr-Agent-Interface/1.0'
           }
         });
         
@@ -1084,7 +1084,7 @@ export async function prepareAnonymousZap(
             method: 'GET', // Explicitly use GET as required by LUD-06
             headers: {
               'Accept': 'application/json',
-              'User-Agent': 'Nostr-MCP-Server/1.0'
+              'User-Agent': 'Nostr-Agent-Interface/1.0'
             }
           });
           

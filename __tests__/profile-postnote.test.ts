@@ -78,7 +78,7 @@ describe('Profile postNote Tool', () => {
         [
           ['t', 'nostr'],
           ['t', 'test'],
-          ['client', 'nostr-mcp-server'],
+          ['client', 'nostr-agent-interface'],
           ['hashtag', 'decentralized']
         ],
         [] // No relays for testing

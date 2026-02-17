@@ -3,8 +3,9 @@
     "nostr": {
       "command": "node",
       "args": [
-        "/Users/plebdev/Desktop/code/nostr-mcp-server/build/index.js"
+        "/Users/plebdev/Desktop/code/nostr-agent-interface/build/app/index.js",
+        "mcp"
       ]
     }
   }
-} 
+}

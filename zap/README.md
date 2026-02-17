@@ -1,54 +1,37 @@
 # Zap Tools
 
-This directory contains tools for working with Nostr Zaps as defined in [NIP-57](https://github.com/nostr-protocol/nips/blob/master/57.md), which enables Lightning Network payments via Nostr.
+This module implements zap-related functionality (NIP-57 + LNURL/LUD flows) used by Nostr Agent Interface.
+
+The same zap contracts are available through MCP, CLI, and API surfaces.
 
 ## Files
 
-- `zap-tools.ts`: Core functionality for processing, validating, and interacting with Nostr zaps using **snstr**
+1. `zap-tools.ts` - zap parsing/validation, LNURL flow handling, anonymous zap preparation.
 
-## Features
+## Capabilities
 
-- **Zap Receipt Validation**: Comprehensive NIP-57 compliant validation of zap receipts
-- **Payment Amount Extraction**: Parse and extract sats amounts from BOLT11 invoices 
-- **Directional Processing**: Determine if zaps were sent, received, or self-zapped
-- **Anonymous Zapping**: Generate anonymous zaps to profiles and events using snstr's event creation and signing
-- **Lightning Integration**: Full integration with LNURL-pay (LUD-06) and Lightning Address (LUD-16)
-- **Smart Caching**: Efficiently cache processed zaps for better performance
-- **Modern Crypto**: Uses snstr's secure key generation and event signing functions
+1. Validate zap receipts (NIP-57).
+2. Parse BOLT11 invoices and extract sats values.
+3. Classify zap direction (`sent`, `received`, `self`, `unknown`).
+4. Prepare anonymous zap requests to profiles/events.
+5. Integrate with LNURL-pay / Lightning Address targets.
 
 ## Usage
 
 ```typescript
-import { 
-  processZapReceipt, 
-  validateZapReceipt, 
+import {
+  processZapReceipt,
+  validateZapReceipt,
   formatZapReceipt,
-  prepareAnonymousZap 
+  prepareAnonymousZap,
 } from "./zap/zap-tools.js";
 
-// Process a zap receipt
-const processedZap = processZapReceipt(zapReceipt, userPubkey);
+const processed = processZapReceipt(zapReceipt, userPubkey);
+const valid = validateZapReceipt(zapReceipt);
+const formatted = formatZapReceipt(processed, userPubkey);
+const anon = await prepareAnonymousZap("npub1...", 1000, "Great post");
 
-// Validate a zap receipt according to NIP-57
-const validationResult = validateZapReceipt(zapReceipt);
-
-// Format a zap for display
-const formattedZap = formatZapReceipt(zap, contextPubkey);
-
-// Prepare an anonymous zap (returns a lightning invoice)
-// Uses snstr for secure key generation and event signing
-const zapResult = await prepareAnonymousZap(targetNpub, 1000, "Great post!");
+void valid;
+void formatted;
+void anon;
 ```
-
-## Core Data Structures
-
-The module defines several key interfaces and types:
-
-- `ZapReceipt`: Represents a NIP-57 zap receipt (kind 9735)
-- `ZapRequest`: Represents a NIP-57 zap request (kind 9734)
-- `ZapDirection`: Enum for zap directions ('sent', 'received', 'self', 'unknown')
-- `CachedZap`: Enhanced zap receipt with additional metadata
-- `LnurlPayResponse`: LNURL-pay service response with zap capabilities
-- `LnurlCallbackResponse`: Response from LNURL-pay callback with invoice
-
-This structure enables robust processing and tracking of zap-related events on the Nostr network. 

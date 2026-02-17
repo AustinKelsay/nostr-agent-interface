@@ -15,9 +15,9 @@ Usage:
   nostr-agent-interface api [--host <host>] [--port <port>]
 
 Modes:
-  mcp  Start the original MCP stdio server
-  cli  Invoke tools via command line through MCP
-  api  Expose tools over HTTP through MCP`);
+  mcp  Start MCP stdio mode
+  cli  Invoke tools via command line
+  api  Expose tools over HTTP API`);
 }
 
 async function main() {

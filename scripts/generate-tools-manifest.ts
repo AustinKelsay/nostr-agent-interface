@@ -34,6 +34,12 @@ async function main() {
         name: "nostr-agent-interface",
         version: packageVersion,
       },
+      interface: {
+        project: "Nostr Agent Interface",
+        lineage: "Extends Nostr MCP Server and preserves its core JARC tool contracts",
+        preferredTransports: ["cli", "api"],
+        supportedTransports: ["mcp", "cli", "api"],
+      },
       toolCount: tools.length,
       tools,
     };
