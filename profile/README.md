@@ -2,7 +2,7 @@
 
 This module handles Nostr identity lifecycle operations used by Nostr Agent Interface.
 
-It inherits the original Nostr MCP Server tool contracts and exposes schema/logic that are transport-neutral (MCP, CLI, API).
+It inherits the original Nostr MCP Server JARC tool contracts and exposes schema/logic that are transport-neutral (MCP, CLI, API), with CLI/API as the default operational paths.
 
 ## Files
 

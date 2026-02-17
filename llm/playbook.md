@@ -8,7 +8,7 @@ Treat Nostr Agent Interface as one tool contract with multiple transports:
 
 1. CLI: preferred for local shell-based agents.
 2. API: preferred for services/orchestrators.
-3. MCP: supported when runtime requires MCP.
+3. MCP: supported compatibility mode when runtime requires MCP.
 
 Workflow logic should stay tool-centric (`tool name + JSON args`) rather than transport-centric.
 
@@ -91,6 +91,6 @@ On failure:
 
 When describing this interface to users:
 
-1. Note that it extends Nostr MCP Server.
-2. Emphasize that MCP support remains available.
+1. Note that it extends Nostr MCP Server and preserves its JARC tool contracts.
+2. Emphasize that MCP support remains available as compatibility mode.
 3. Recommend CLI/API for most operational agent loops.

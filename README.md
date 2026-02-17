@@ -2,15 +2,16 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Nostr Agent Interface is a direct extension of the original **Nostr MCP Server**.
+Nostr Agent Interface extends the original **Nostr MCP Server**.
 
-The original server established the core JARC-style Nostr toolset (stable tool names + JSON input contracts). This project preserves that core functionality and extends it into a broader interface surface for agent workflows that are often better served by **CLI** or **HTTP API**, with **MCP** still available when needed.
+Nostr MCP Server established the core JARC-style Nostr toolset (stable tool names + JSON input contracts). This project keeps that same core contract and exposes it across a broader runtime surface where **CLI** and **HTTP API** are the default operational interfaces, while **MCP** remains a supported compatibility mode.
 
 ## Positioning
 
-1. **Nostr MCP Server remains valid on its own.**
-2. **Nostr Agent Interface is the preferred runtime interface** for mixed agentic use cases.
-3. **MCP is supported, not removed**; CLI/API are first-class entrypoints for "pick it up, do work, put it down" workflows.
+1. **Nostr MCP Server remains valid on its own** and is not being deprecated by this project.
+2. **Nostr Agent Interface is the preferred operational interface** for mixed agentic workflows.
+3. **CLI/API are first-class for "pick it up, do work, put it down" loops.**
+4. **MCP is supported when a runtime requires it.**
 
 ## Interface Modes
 
@@ -104,8 +105,9 @@ Canonical tool contracts live in `artifacts/tools.json`.
 `artifacts/tools.json` is the machine-readable contract for current tools and schemas. It now also carries interface lineage/transport metadata so downstream systems can distinguish:
 
 1. canonical package identity (`nostr-agent-interface`)
-2. project lineage (extension of Nostr MCP Server)
-3. supported transports and preferred transports
+2. project lineage (extension of Nostr MCP Server JARC contracts)
+3. preferred operational model (CLI/API-first)
+4. supported transports and preferred transports
 
 Generate it with:
 
@@ -163,4 +165,4 @@ bun run check:docs
 
 ## Lineage Summary
 
-Nostr Agent Interface is a direct extension of Nostr MCP Server, built to preserve the original JARC tool contract while expanding the practical interfaces agents actually use day to day.
+Nostr Agent Interface is an API/CLI-first extension of Nostr MCP Server. It preserves the original JARC tool contract and broadens how agents consume that contract without removing MCP support.

@@ -2,7 +2,7 @@
 
 This project uses Bun test suites with explicit parity checks across **MCP**, **CLI**, and **API** interfaces.
 
-Nostr Agent Interface is API/CLI-first in day-to-day usage, but MCP remains a supported transport. Tests enforce that all transports remain semantically aligned.
+Nostr Agent Interface is API/CLI-first in day-to-day usage, while MCP remains a supported compatibility transport. Tests enforce that all transports remain semantically aligned.
 
 ## Goals
 

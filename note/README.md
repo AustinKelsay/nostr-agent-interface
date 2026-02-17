@@ -2,7 +2,7 @@
 
 This module contains note-centric operations for Nostr Agent Interface, including read, create, sign, publish, and anonymous posting flows.
 
-Schemas and handlers are reused across MCP, CLI, and API transports.
+Schemas and handlers are reused across MCP, CLI, and API transports, with CLI/API as the preferred operational interfaces.
 
 ## Files
 

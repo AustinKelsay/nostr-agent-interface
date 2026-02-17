@@ -9,7 +9,7 @@ This document outlines the release process for `nostr-agent-interface`.
 1. Pull latest `staging`.
 2. Confirm clean working tree.
 3. Confirm `CHANGELOG.md` has an accurate `[Unreleased]` section.
-4. Confirm docs still reflect project positioning: Nostr Agent Interface extends Nostr MCP Server, CLI/API are preferred operational interfaces, and MCP remains supported.
+4. Confirm docs still reflect project positioning: Nostr Agent Interface extends Nostr MCP Server, preserves JARC contracts, prefers CLI/API for operations, and keeps MCP as supported compatibility mode.
 
 ### 1. Run Pre-release Checks
 

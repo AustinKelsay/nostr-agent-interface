@@ -10,3 +10,5 @@ For current project positioning and operational guidance, use:
 2. `llm/README.md`
 3. `docs/testing.md`
 4. module READMEs under `profile/`, `note/`, and `zap/`
+
+Current positioning: Nostr Agent Interface extends Nostr MCP Server's JARC tool contracts, operates CLI/API-first, and keeps MCP as supported compatibility mode.

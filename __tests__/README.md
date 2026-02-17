@@ -1,6 +1,6 @@
 # Nostr Agent Interface Test Suite
 
-This directory contains tests for the shared Nostr tool contract and its MCP/CLI/API interface surfaces.
+This directory contains tests for the shared Nostr tool contract and its MCP/CLI/API interface surfaces, with CLI/API as the preferred operational transports and MCP kept in parity.
 
 ## Test Scope
 

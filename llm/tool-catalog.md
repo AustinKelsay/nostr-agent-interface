@@ -2,7 +2,7 @@
 
 This catalog represents the canonical Nostr tool contract used by Nostr Agent Interface.
 
-Lineage note: the contract originates from the original Nostr MCP Server and is extended here for broader CLI/API/MCP agent workflows.
+Lineage note: this contract originates from the original Nostr MCP Server JARC toolset and is extended here for broader CLI/API workflows, with MCP preserved as a supported compatibility transport.
 
 ## Reading and Querying
 

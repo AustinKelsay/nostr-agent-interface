@@ -2,7 +2,7 @@
 
 This module implements zap-related functionality (NIP-57 + LNURL/LUD flows) used by Nostr Agent Interface.
 
-The same zap contracts are available through MCP, CLI, and API surfaces.
+The same zap contracts are available through MCP, CLI, and API surfaces, with CLI/API as the preferred operational paths and MCP retained for compatibility.
 
 ## Files
 

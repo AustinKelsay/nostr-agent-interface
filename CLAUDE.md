@@ -10,7 +10,7 @@ Core principles:
 
 1. Keep one canonical Nostr tool surface (JARC-style tool contracts).
 2. Expose that surface through MCP, CLI, and HTTP API.
-3. Prefer CLI/API for most agent workflows while retaining MCP compatibility.
+3. Prefer CLI/API for most operational agent workflows while retaining MCP compatibility.
 
 Current tool count: **40**.
 
@@ -46,7 +46,7 @@ bun run start:api
 
 ### Entry Points
 
-1. `index.ts` - Canonical MCP server + tool registration for the shared tool surface.
+1. `index.ts` - Shared tool registration and MCP host for the common tool surface.
 2. `app/index.ts` - Interface launcher (`mcp`, `cli`, `api`).
 3. `app/cli.ts` - CLI wrapper over shared tool contracts.
 4. `app/api.ts` - HTTP wrapper over shared tool contracts.

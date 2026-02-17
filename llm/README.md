@@ -2,11 +2,11 @@
 
 This folder is the model-facing documentation for building LLM workflows on top of **Nostr Agent Interface**.
 
-Nostr Agent Interface extends the original Nostr MCP Server toolset and keeps one canonical contract surfaced through three transports:
+Nostr Agent Interface extends the original Nostr MCP Server JARC toolset and keeps one canonical contract surfaced through three transports:
 
 1. CLI (preferred for local agents)
 2. HTTP API (preferred for orchestrated agents)
-3. MCP (supported for MCP-native clients)
+3. MCP (supported compatibility mode for MCP-native clients)
 
 ## Goals
 
