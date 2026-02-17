@@ -1,6 +1,5 @@
 # Nostr Agent Interface
 
-[![npm version](https://badge.fury.io/js/nostr-agent-interface.svg)](https://www.npmjs.com/package/nostr-agent-interface)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Nostr Agent Interface is a direct extension of the original **Nostr MCP Server**.
