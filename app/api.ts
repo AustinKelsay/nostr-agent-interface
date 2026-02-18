@@ -575,7 +575,10 @@ export async function runApi(args: string[]): Promise<void> {
       }
 
       if (options.rateLimitMax > 0 && isProtectedRoute(method, canonicalPath)) {
-        const clientIdentifier = getClientIdentifier(req, requestApiKey);
+        const validatedApiKey = options.apiKey && requestApiKey === options.apiKey
+          ? requestApiKey
+          : undefined;
+        const clientIdentifier = getClientIdentifier(req, validatedApiKey);
         const rateLimit = rateLimiter.check(clientIdentifier);
 
         res.setHeader("x-ratelimit-limit", String(rateLimit.limit));

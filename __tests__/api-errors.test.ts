@@ -6,9 +6,11 @@ const API_HOST = "127.0.0.1";
 const API_PORT = 41000 + Math.floor(Math.random() * 1000);
 const SECURED_API_PORT = API_PORT + 1000;
 const RATE_LIMITED_API_PORT = API_PORT + 2000;
+const RATE_LIMITED_ROTATING_KEY_API_PORT = API_PORT + 3000;
 const API_BASE_URL = `http://${API_HOST}:${API_PORT}`;
 const SECURED_API_BASE_URL = `http://${API_HOST}:${SECURED_API_PORT}`;
 const RATE_LIMITED_API_BASE_URL = `http://${API_HOST}:${RATE_LIMITED_API_PORT}`;
+const RATE_LIMITED_ROTATING_KEY_API_BASE_URL = `http://${API_HOST}:${RATE_LIMITED_ROTATING_KEY_API_PORT}`;
 const TEST_API_KEY = "test-api-key";
 
 type StartedApi = {
@@ -76,18 +78,22 @@ function startApiProcess(port: number, env: NodeJS.ProcessEnv = process.env): St
 async function stopApiProcess(apiProcess: ChildProcess | undefined): Promise<void> {
   if (!apiProcess) return;
 
-  if (!apiProcess.killed) {
+  if (apiProcess.exitCode === null) {
     apiProcess.kill("SIGTERM");
   }
 
   await new Promise((resolve) => {
-    apiProcess.once("exit", () => resolve(undefined));
-    setTimeout(() => {
-      if (!apiProcess.killed) {
+    const forceKillTimer = setTimeout(() => {
+      if (apiProcess.exitCode === null) {
         apiProcess.kill("SIGKILL");
       }
       resolve(undefined);
     }, 1500);
+
+    apiProcess.once("exit", () => {
+      clearTimeout(forceKillTimer);
+      resolve(undefined);
+    });
   });
 }
 
@@ -278,5 +284,45 @@ describe("API rate limiting", () => {
     expect(third.headers.get("x-ratelimit-limit")).toBe("2");
     expect(third.headers.get("x-ratelimit-remaining")).toBe("0");
     expect(third.headers.get("x-ratelimit-reset")).toBeTruthy();
+  });
+});
+
+describe("API rate limiting without auth", () => {
+  let apiProcess: ChildProcess | undefined;
+  let getLogs = () => "";
+
+  beforeAll(async () => {
+    const started = startApiProcess(RATE_LIMITED_ROTATING_KEY_API_PORT, {
+      ...process.env,
+      NOSTR_AGENT_API_RATE_LIMIT_MAX: "2",
+      NOSTR_AGENT_API_RATE_LIMIT_WINDOW_MS: "60000",
+    });
+    apiProcess = started.process;
+    getLogs = started.getLogs;
+
+    await waitForApiReady(RATE_LIMITED_ROTATING_KEY_API_BASE_URL, () => apiProcess, getLogs);
+  });
+
+  afterAll(async () => {
+    await stopApiProcess(apiProcess);
+    apiProcess = undefined;
+  });
+
+  test("cannot bypass limits by rotating x-api-key when auth is disabled", async () => {
+    const first = await fetch(`${RATE_LIMITED_ROTATING_KEY_API_BASE_URL}/tools`, {
+      headers: { "x-api-key": "key-a" },
+    });
+    const second = await fetch(`${RATE_LIMITED_ROTATING_KEY_API_BASE_URL}/tools`, {
+      headers: { "x-api-key": "key-b" },
+    });
+    const third = await fetch(`${RATE_LIMITED_ROTATING_KEY_API_BASE_URL}/tools`, {
+      headers: { "x-api-key": "key-c" },
+    });
+    const body = await third.json();
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(third.status).toBe(429);
+    expect(body?.error?.code).toBe("rate_limited");
   });
 });

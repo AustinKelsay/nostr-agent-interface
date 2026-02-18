@@ -49,18 +49,22 @@ function startApiProcess(env: NodeJS.ProcessEnv = process.env): StartedApi {
 async function stopApiProcess(apiProcess: ChildProcess | undefined): Promise<void> {
   if (!apiProcess) return;
 
-  if (!apiProcess.killed) {
+  if (apiProcess.exitCode === null) {
     apiProcess.kill("SIGTERM");
   }
 
   await new Promise((resolve) => {
-    apiProcess.once("exit", () => resolve(undefined));
-    setTimeout(() => {
-      if (!apiProcess.killed) {
+    const forceKillTimer = setTimeout(() => {
+      if (apiProcess.exitCode === null) {
         apiProcess.kill("SIGKILL");
       }
       resolve(undefined);
     }, 1500);
+
+    apiProcess.once("exit", () => {
+      clearTimeout(forceKillTimer);
+      resolve(undefined);
+    });
   });
 }
 
