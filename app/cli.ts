@@ -318,7 +318,7 @@ function parseDirectToolArgs(args: string[], tool: CliToolDefinition): ToolComma
     const rawOption = arg.slice(2);
     const equalsIndex = rawOption.indexOf("=");
     const optionName = equalsIndex >= 0 ? rawOption.slice(0, equalsIndex) : rawOption;
-    let optionValue = equalsIndex >= 0 ? rawOption.slice(equalsIndex + 1) : undefined;
+    let optionValue = equalsIndex >= 0 ? rawOption.slice(equalsIndex + 1) : null;
     const propertyName = optionsLookup.get(optionName);
 
     if (!propertyName) {
@@ -333,7 +333,7 @@ function parseDirectToolArgs(args: string[], tool: CliToolDefinition): ToolComma
     const propertySchema = properties[propertyName];
     const propertyType = getSchemaType(propertySchema);
 
-    if (typeof optionValue === "undefined") {
+    if (optionValue === null) {
       const nextArg = args[i + 1];
       const canConsumeNext = typeof nextArg === "string" && !nextArg.startsWith("--");
 
@@ -346,14 +346,8 @@ function parseDirectToolArgs(args: string[], tool: CliToolDefinition): ToolComma
         throw new Error(`Missing value for --${optionName}`);
       }
 
-      if (canConsumeNext) {
-        optionValue = nextArg;
-        i += 1;
-      }
-    }
-
-    if (typeof optionValue === "undefined") {
-      throw new Error(`Missing value for --${optionName}`);
+      optionValue = nextArg;
+      i += 1;
     }
 
     toolArgs[propertyName] = parseToolArgValue(optionValue, propertySchema, `--${optionName}`);

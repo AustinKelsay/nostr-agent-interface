@@ -56,10 +56,10 @@ curl -s http://127.0.0.1:3030/v1/tools/getProfile \
 Optional API auth:
 
 ```bash
-NOSTR_AGENT_API_KEY=your-token nostr-agent-interface api --host 127.0.0.1 --port 3030
+NOSTR_AGENT_API_KEY=<api-key> nostr-agent-interface api --host 127.0.0.1 --port 3030
 
 curl -s http://127.0.0.1:3030/tools \
-  -H 'x-api-key: your-token'
+  -H 'x-api-key: <api-key>'
 ```
 
 ### MCP
