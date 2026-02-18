@@ -66,7 +66,14 @@ Baseline policy:
 CLI:
 
 ```bash
-nostr-agent-interface cli call getProfile '{"pubkey":"npub..."}'
+nostr-agent-interface cli getProfile --pubkey npub...
+nostr-agent-interface cli getProfile --help
+```
+
+CLI (JSON object style):
+
+```bash
+nostr-agent-interface cli getProfile '{"pubkey":"npub..."}' --json
 ```
 
 API:

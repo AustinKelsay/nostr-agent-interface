@@ -48,7 +48,9 @@ Checks:
 1. Help output.
 2. `--json` behavior.
 3. `--stdin` JSON arg flow.
-4. Argument validation edge cases.
+4. Direct tool invocation (`cli <toolName> --field value`).
+5. Tool-specific help (`cli <toolName> --help`).
+6. Argument validation edge cases.
 
 ## API Error Envelope Tests
 
