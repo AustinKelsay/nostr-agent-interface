@@ -18,6 +18,7 @@ Nostr Agent Interface extends the original Nostr MCP Server JARC toolset and kee
 
 1. `tool-catalog.md` - grouped catalog of tool intent.
 2. `playbook.md` - prompting patterns, guardrails, workflow templates.
+3. `../docs/cli.md` - schema-driven CLI command model and examples.
 
 ## Quick Start
 
@@ -25,7 +26,9 @@ Nostr Agent Interface extends the original Nostr MCP Server JARC toolset and kee
 
 ```bash
 nostr-agent-interface cli list-tools
-nostr-agent-interface cli call getProfile '{"pubkey":"npub..."}'
+nostr-agent-interface cli getProfile --pubkey npub...
+nostr-agent-interface cli convertNip19 --input npub... --target-type hex --json
+nostr-agent-interface cli getProfile --help
 ```
 
 ### API

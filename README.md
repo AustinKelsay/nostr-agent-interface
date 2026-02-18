@@ -32,8 +32,24 @@ Compatibility binaries:
 
 ```bash
 nostr-agent-interface cli list-tools --json
+nostr-agent-interface cli getProfile --pubkey npub... --json
+nostr-agent-interface cli convertNip19 --input npub... --target-type hex --json
+```
+
+Tool-specific help (derived from MCP tool schema):
+
+```bash
+nostr-agent-interface cli getProfile --help
+nostr-agent-interface cli postNote --help
+```
+
+Legacy-compatible invocation style is still available:
+
+```bash
 nostr-agent-interface cli call getProfile '{"pubkey":"npub..."}' --json
 ```
+
+Full CLI usage guide: `docs/cli.md`
 
 ### API (recommended for orchestration)
 
@@ -188,11 +204,12 @@ Sample config file: `claude_desktop_config.sample.json`
 1. `llm/README.md`
 2. `llm/tool-catalog.md`
 3. `llm/playbook.md`
-4. `docs/api.md`
-5. `docs/testing.md`
-6. `profile/README.md`
-7. `note/README.md`
-8. `zap/README.md`
+4. `docs/cli.md`
+5. `docs/api.md`
+6. `docs/testing.md`
+7. `profile/README.md`
+8. `note/README.md`
+9. `zap/README.md`
 
 ## Development
 

@@ -27,7 +27,7 @@ Unit tests include:
 Interface tests include:
 
 1. `interface-parity.test.ts`
-2. `cli-ux.test.ts`
+2. `cli-ux.test.ts` (direct tool commands + legacy `call` UX + stdin/help validation)
 3. `api-errors.test.ts` (error envelope + API auth + API rate limiting)
 4. `api-audit-logging.test.ts` (structured API audit logs + redaction)
 

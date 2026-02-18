@@ -2,6 +2,8 @@
 
 Nostr Agent Interface exposes the canonical tool contract over HTTP.
 
+For CLI usage of the same tool contract, see `docs/cli.md`.
+
 ## Start
 
 ```bash
