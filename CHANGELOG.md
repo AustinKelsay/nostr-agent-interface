@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added lineage and transport metadata to generated `artifacts/tools.json` so downstream consumers can identify interface intent, CLI/API-first preference, and MCP compatibility posture.
+- Added optional API-key protection for HTTP tool endpoints via `NOSTR_AGENT_API_KEY` (`x-api-key` or `Authorization: Bearer`), while keeping `GET /health` publicly accessible for probes.
+- Added configurable in-memory rate limiting for API tool endpoints via `NOSTR_AGENT_API_RATE_LIMIT_MAX` and `NOSTR_AGENT_API_RATE_LIMIT_WINDOW_MS`, including standardized `429 rate_limited` responses and rate-limit headers.
+- Added structured API audit logging with request/response events, sensitive-field redaction, and `x-request-id` correlation controls (`NOSTR_AGENT_API_AUDIT_LOG_ENABLED`, `NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES`).
+- Added `/v1` API route compatibility layer (`/v1/health`, `/v1/tools`, `/v1/tools/:toolName`) while preserving existing route support.
 
 ## [3.0.0] - 2026-02-13
 

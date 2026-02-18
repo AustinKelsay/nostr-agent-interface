@@ -4,21 +4,34 @@ import path from "node:path";
 
 const API_HOST = "127.0.0.1";
 const API_PORT = 41000 + Math.floor(Math.random() * 1000);
+const SECURED_API_PORT = API_PORT + 1000;
+const RATE_LIMITED_API_PORT = API_PORT + 2000;
 const API_BASE_URL = `http://${API_HOST}:${API_PORT}`;
+const SECURED_API_BASE_URL = `http://${API_HOST}:${SECURED_API_PORT}`;
+const RATE_LIMITED_API_BASE_URL = `http://${API_HOST}:${RATE_LIMITED_API_PORT}`;
+const TEST_API_KEY = "test-api-key";
 
-let apiProcess: ChildProcess | undefined;
-let apiLogs = "";
+type StartedApi = {
+  process: ChildProcess;
+  getLogs: () => string;
+};
 
-async function waitForApiReady(timeoutMs = 15000): Promise<void> {
+async function waitForApiReady(
+  apiBaseUrl: string,
+  getProc: () => ChildProcess | undefined,
+  getLogs: () => string,
+  timeoutMs = 15000,
+): Promise<void> {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutMs) {
+    const apiProcess = getProc();
     if (apiProcess && apiProcess.exitCode !== null) {
-      throw new Error(`API process exited early with code ${apiProcess.exitCode}. Logs:\n${apiLogs}`);
+      throw new Error(`API process exited early with code ${apiProcess.exitCode}. Logs:\n${getLogs()}`);
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/health`);
+      const response = await fetch(`${apiBaseUrl}/health`);
       if (response.ok) {
         return;
       }
@@ -29,53 +42,70 @@ async function waitForApiReady(timeoutMs = 15000): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 
-  throw new Error(`API did not become ready within ${timeoutMs}ms. Logs:\n${apiLogs}`);
+  throw new Error(`API did not become ready within ${timeoutMs}ms. Logs:\n${getLogs()}`);
+}
+
+function startApiProcess(port: number, env: NodeJS.ProcessEnv = process.env): StartedApi {
+  const entrypoint = path.resolve(process.cwd(), "app/index.ts");
+  const apiProcess = spawn(
+    process.execPath,
+    [entrypoint, "api", "--host", API_HOST, "--port", String(port)],
+    {
+      cwd: process.cwd(),
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+
+  let apiLogs = "";
+  apiProcess.stdout?.setEncoding("utf8");
+  apiProcess.stderr?.setEncoding("utf8");
+  apiProcess.stdout?.on("data", (chunk) => {
+    apiLogs += chunk;
+  });
+  apiProcess.stderr?.on("data", (chunk) => {
+    apiLogs += chunk;
+  });
+
+  return {
+    process: apiProcess,
+    getLogs: () => apiLogs,
+  };
+}
+
+async function stopApiProcess(apiProcess: ChildProcess | undefined): Promise<void> {
+  if (!apiProcess) return;
+
+  if (!apiProcess.killed) {
+    apiProcess.kill("SIGTERM");
+  }
+
+  await new Promise((resolve) => {
+    apiProcess.once("exit", () => resolve(undefined));
+    setTimeout(() => {
+      if (!apiProcess.killed) {
+        apiProcess.kill("SIGKILL");
+      }
+      resolve(undefined);
+    }, 1500);
+  });
 }
 
 describe("API error envelope", () => {
+  let apiProcess: ChildProcess | undefined;
+  let getLogs = () => "";
+
   beforeAll(async () => {
-    const entrypoint = path.resolve(process.cwd(), "app/index.ts");
-    apiProcess = spawn(
-      process.execPath,
-      [entrypoint, "api", "--host", API_HOST, "--port", String(API_PORT)],
-      {
-        cwd: process.cwd(),
-        env: process.env,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
+    const started = startApiProcess(API_PORT);
+    apiProcess = started.process;
+    getLogs = started.getLogs;
 
-    apiProcess.stdout?.setEncoding("utf8");
-    apiProcess.stderr?.setEncoding("utf8");
-    apiProcess.stdout?.on("data", (chunk) => {
-      apiLogs += chunk;
-    });
-    apiProcess.stderr?.on("data", (chunk) => {
-      apiLogs += chunk;
-    });
-
-    await waitForApiReady();
+    await waitForApiReady(API_BASE_URL, () => apiProcess, getLogs);
   });
 
   afterAll(async () => {
-    if (!apiProcess) return;
-
-    const proc = apiProcess;
+    await stopApiProcess(apiProcess);
     apiProcess = undefined;
-
-    if (!proc.killed) {
-      proc.kill("SIGTERM");
-    }
-
-    await new Promise((resolve) => {
-      proc.once("exit", () => resolve(undefined));
-      setTimeout(() => {
-        if (!proc.killed) {
-          proc.kill("SIGKILL");
-        }
-        resolve(undefined);
-      }, 1500);
-    });
   });
 
   test("404 responses use standardized error payload", async () => {
@@ -89,6 +119,32 @@ describe("API error envelope", () => {
     expect(typeof body?.error?.message).toBe("string");
     expect(body?.error?.requestId).toBe(requestId);
     expect(Array.isArray(body?.error?.details?.endpoints)).toBe(true);
+  });
+
+  test("v1 routes are backward-compatible", async () => {
+    const legacyToolsRes = await fetch(`${API_BASE_URL}/tools`);
+    const v1ToolsRes = await fetch(`${API_BASE_URL}/v1/tools`);
+    const legacyTools = await legacyToolsRes.json();
+    const v1Tools = await v1ToolsRes.json();
+
+    expect(legacyToolsRes.status).toBe(200);
+    expect(v1ToolsRes.status).toBe(200);
+
+    const legacyNames = (legacyTools?.tools ?? []).map((tool: any) => tool.name).sort();
+    const v1Names = (v1Tools?.tools ?? []).map((tool: any) => tool.name).sort();
+    expect(v1Names).toEqual(legacyNames);
+
+    const v1CallRes = await fetch(`${API_BASE_URL}/v1/tools/getProfile`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ pubkey: "invalid_pubkey" }),
+    });
+    const v1CallBody = await v1CallRes.json();
+
+    expect(v1CallRes.status).toBe(200);
+    expect(Array.isArray(v1CallBody?.content)).toBe(true);
   });
 
   test("invalid JSON returns invalid_json error code", async () => {
@@ -107,5 +163,120 @@ describe("API error envelope", () => {
     expect(body?.error?.code).toBe("invalid_json");
     expect(body?.error?.requestId).toBe(requestId);
     expect(typeof body?.error?.details).toBe("string");
+  });
+});
+
+describe("API optional key auth", () => {
+  let apiProcess: ChildProcess | undefined;
+  let getLogs = () => "";
+
+  beforeAll(async () => {
+    const started = startApiProcess(SECURED_API_PORT, {
+      ...process.env,
+      NOSTR_AGENT_API_KEY: TEST_API_KEY,
+    });
+    apiProcess = started.process;
+    getLogs = started.getLogs;
+
+    await waitForApiReady(SECURED_API_BASE_URL, () => apiProcess, getLogs);
+  });
+
+  afterAll(async () => {
+    await stopApiProcess(apiProcess);
+    apiProcess = undefined;
+  });
+
+  test("health remains public and indicates auth mode", async () => {
+    const response = await fetch(`${SECURED_API_BASE_URL}/health`);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body?.status).toBe("ok");
+    expect(body?.authRequired).toBe(true);
+  });
+
+  test("tools list requires API key when configured", async () => {
+    const response = await fetch(`${SECURED_API_BASE_URL}/tools`);
+    const body = await response.json();
+    const requestId = response.headers.get("x-request-id");
+
+    expect(response.status).toBe(401);
+    expect(body?.error?.code).toBe("unauthorized");
+    expect(body?.error?.requestId).toBe(requestId);
+  });
+
+  test("v1 tools list also requires API key when configured", async () => {
+    const response = await fetch(`${SECURED_API_BASE_URL}/v1/tools`);
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body?.error?.code).toBe("unauthorized");
+  });
+
+  test("tools list accepts x-api-key header", async () => {
+    const response = await fetch(`${SECURED_API_BASE_URL}/tools`, {
+      headers: {
+        "x-api-key": TEST_API_KEY,
+      },
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(Array.isArray(body?.tools)).toBe(true);
+  });
+
+  test("tool call accepts bearer auth header", async () => {
+    const response = await fetch(`${SECURED_API_BASE_URL}/tools/getProfile`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${TEST_API_KEY}`,
+      },
+      body: JSON.stringify({ pubkey: "invalid_pubkey" }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(Array.isArray(body?.content)).toBe(true);
+  });
+});
+
+describe("API rate limiting", () => {
+  let apiProcess: ChildProcess | undefined;
+  let getLogs = () => "";
+
+  beforeAll(async () => {
+    const started = startApiProcess(RATE_LIMITED_API_PORT, {
+      ...process.env,
+      NOSTR_AGENT_API_RATE_LIMIT_MAX: "2",
+      NOSTR_AGENT_API_RATE_LIMIT_WINDOW_MS: "60000",
+    });
+    apiProcess = started.process;
+    getLogs = started.getLogs;
+
+    await waitForApiReady(RATE_LIMITED_API_BASE_URL, () => apiProcess, getLogs);
+  });
+
+  afterAll(async () => {
+    await stopApiProcess(apiProcess);
+    apiProcess = undefined;
+  });
+
+  test("returns 429 and rate-limit metadata after limit is reached", async () => {
+    const first = await fetch(`${RATE_LIMITED_API_BASE_URL}/tools`);
+    const second = await fetch(`${RATE_LIMITED_API_BASE_URL}/tools`);
+    const third = await fetch(`${RATE_LIMITED_API_BASE_URL}/tools`);
+    const body = await third.json();
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+
+    expect(third.status).toBe(429);
+    expect(body?.error?.code).toBe("rate_limited");
+    expect(typeof body?.error?.details?.retryAfterMs).toBe("number");
+    expect(third.headers.get("retry-after")).toBeTruthy();
+    expect(third.headers.get("x-ratelimit-limit")).toBe("2");
+    expect(third.headers.get("x-ratelimit-remaining")).toBe("0");
+    expect(third.headers.get("x-ratelimit-reset")).toBeTruthy();
   });
 });

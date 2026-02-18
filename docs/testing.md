@@ -16,6 +16,7 @@ Nostr Agent Interface is API/CLI-first in day-to-day usage, while MCP remains a 
 bun test
 bun test __tests__/interface-parity.test.ts __tests__/cli-ux.test.ts
 bun test __tests__/api-errors.test.ts
+bun test __tests__/api-audit-logging.test.ts
 bun run build
 ```
 
@@ -59,7 +60,23 @@ Checks:
 
 1. `not_found` shape.
 2. `invalid_json` shape.
-3. `requestId` and `x-request-id` correlation.
+3. Optional API-key auth behavior (`unauthorized` without credentials).
+4. Header auth acceptance (`x-api-key` and `authorization: Bearer`).
+5. Rate-limit response behavior (`429` + rate-limit headers).
+6. Legacy and `/v1` endpoint compatibility.
+7. `requestId` and `x-request-id` correlation.
+
+## API Audit Logging Tests
+
+Coverage file:
+
+1. `__tests__/api-audit-logging.test.ts`
+
+Checks:
+
+1. Structured request/response log emission.
+2. `requestId` correlation between response header and audit logs.
+3. Sensitive header/body redaction.
 
 ## Artifact Validation
 
@@ -88,8 +105,13 @@ Useful env vars:
 1. `NOSTR_DEFAULT_RELAYS`
 2. `NOSTR_AGENT_API_HOST`
 3. `NOSTR_AGENT_API_PORT`
-4. `NOSTR_MCP_COMMAND`
-5. `NOSTR_MCP_ARGS`
+4. `NOSTR_AGENT_API_KEY`
+5. `NOSTR_AGENT_API_RATE_LIMIT_MAX`
+6. `NOSTR_AGENT_API_RATE_LIMIT_WINDOW_MS`
+7. `NOSTR_AGENT_API_AUDIT_LOG_ENABLED`
+8. `NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES`
+9. `NOSTR_MCP_COMMAND`
+10. `NOSTR_MCP_ARGS`
 
 ## Troubleshooting
 
