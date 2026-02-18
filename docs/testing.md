@@ -63,8 +63,10 @@ Checks:
 3. Optional API-key auth behavior (`unauthorized` without credentials).
 4. Header auth acceptance (`x-api-key` and `authorization: Bearer`).
 5. Rate-limit response behavior (`429` + rate-limit headers).
-6. Legacy and `/v1` endpoint compatibility.
-7. `requestId` and `x-request-id` correlation.
+6. Anti-spoof behavior for limiter identity when `NOSTR_AGENT_API_TRUST_PROXY=false`.
+7. Request-body size cap behavior (`413 payload_too_large` with `NOSTR_AGENT_API_MAX_BODY_BYTES`).
+8. Legacy and `/v1` endpoint compatibility.
+9. `requestId` and `x-request-id` correlation.
 
 ## API Audit Logging Tests
 
@@ -108,10 +110,12 @@ Useful env vars:
 4. `NOSTR_AGENT_API_KEY`
 5. `NOSTR_AGENT_API_RATE_LIMIT_MAX`
 6. `NOSTR_AGENT_API_RATE_LIMIT_WINDOW_MS`
-7. `NOSTR_AGENT_API_AUDIT_LOG_ENABLED`
-8. `NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES`
-9. `NOSTR_MCP_COMMAND`
-10. `NOSTR_MCP_ARGS`
+7. `NOSTR_AGENT_API_TRUST_PROXY`
+8. `NOSTR_AGENT_API_MAX_BODY_BYTES`
+9. `NOSTR_AGENT_API_AUDIT_LOG_ENABLED`
+10. `NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES`
+11. `NOSTR_MCP_COMMAND`
+12. `NOSTR_MCP_ARGS`
 
 ## Troubleshooting
 

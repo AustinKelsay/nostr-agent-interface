@@ -7,10 +7,14 @@ const API_PORT = 41000 + Math.floor(Math.random() * 1000);
 const SECURED_API_PORT = API_PORT + 1000;
 const RATE_LIMITED_API_PORT = API_PORT + 2000;
 const RATE_LIMITED_ROTATING_KEY_API_PORT = API_PORT + 3000;
+const RATE_LIMITED_SPOOFED_PROXY_API_PORT = API_PORT + 4000;
+const BODY_LIMITED_API_PORT = API_PORT + 5000;
 const API_BASE_URL = `http://${API_HOST}:${API_PORT}`;
 const SECURED_API_BASE_URL = `http://${API_HOST}:${SECURED_API_PORT}`;
 const RATE_LIMITED_API_BASE_URL = `http://${API_HOST}:${RATE_LIMITED_API_PORT}`;
 const RATE_LIMITED_ROTATING_KEY_API_BASE_URL = `http://${API_HOST}:${RATE_LIMITED_ROTATING_KEY_API_PORT}`;
+const RATE_LIMITED_SPOOFED_PROXY_API_BASE_URL = `http://${API_HOST}:${RATE_LIMITED_SPOOFED_PROXY_API_PORT}`;
+const BODY_LIMITED_API_BASE_URL = `http://${API_HOST}:${BODY_LIMITED_API_PORT}`;
 const TEST_API_KEY = "test-api-key";
 
 type StartedApi = {
@@ -324,5 +328,83 @@ describe("API rate limiting without auth", () => {
     expect(second.status).toBe(200);
     expect(third.status).toBe(429);
     expect(body?.error?.code).toBe("rate_limited");
+  });
+});
+
+describe("API rate limiting ignores spoofed proxy headers by default", () => {
+  let apiProcess: ChildProcess | undefined;
+  let getLogs = () => "";
+
+  beforeAll(async () => {
+    const started = startApiProcess(RATE_LIMITED_SPOOFED_PROXY_API_PORT, {
+      ...process.env,
+      NOSTR_AGENT_API_RATE_LIMIT_MAX: "2",
+      NOSTR_AGENT_API_RATE_LIMIT_WINDOW_MS: "60000",
+    });
+    apiProcess = started.process;
+    getLogs = started.getLogs;
+
+    await waitForApiReady(RATE_LIMITED_SPOOFED_PROXY_API_BASE_URL, () => apiProcess, getLogs);
+  });
+
+  afterAll(async () => {
+    await stopApiProcess(apiProcess);
+    apiProcess = undefined;
+  });
+
+  test("cannot bypass limits by rotating x-forwarded-for when trust proxy is disabled", async () => {
+    const first = await fetch(`${RATE_LIMITED_SPOOFED_PROXY_API_BASE_URL}/tools`, {
+      headers: { "x-forwarded-for": "198.51.100.1" },
+    });
+    const second = await fetch(`${RATE_LIMITED_SPOOFED_PROXY_API_BASE_URL}/tools`, {
+      headers: { "x-forwarded-for": "198.51.100.2" },
+    });
+    const third = await fetch(`${RATE_LIMITED_SPOOFED_PROXY_API_BASE_URL}/tools`, {
+      headers: { "x-forwarded-for": "198.51.100.3" },
+    });
+    const body = await third.json();
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(third.status).toBe(429);
+    expect(body?.error?.code).toBe("rate_limited");
+  });
+});
+
+describe("API request body size limits", () => {
+  let apiProcess: ChildProcess | undefined;
+  let getLogs = () => "";
+
+  beforeAll(async () => {
+    const started = startApiProcess(BODY_LIMITED_API_PORT, {
+      ...process.env,
+      NOSTR_AGENT_API_RATE_LIMIT_MAX: "0",
+      NOSTR_AGENT_API_MAX_BODY_BYTES: "64",
+    });
+    apiProcess = started.process;
+    getLogs = started.getLogs;
+
+    await waitForApiReady(BODY_LIMITED_API_BASE_URL, () => apiProcess, getLogs);
+  });
+
+  afterAll(async () => {
+    await stopApiProcess(apiProcess);
+    apiProcess = undefined;
+  });
+
+  test("returns 413 when request body exceeds configured max size", async () => {
+    const oversizedBody = JSON.stringify({ pubkey: `npub${"x".repeat(256)}` });
+    const response = await fetch(`${BODY_LIMITED_API_BASE_URL}/tools/getProfile`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: oversizedBody,
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(413);
+    expect(body?.error?.code).toBe("payload_too_large");
+    expect(body?.error?.details?.maxBodyBytes).toBe(64);
   });
 });

@@ -61,7 +61,14 @@ Rate limiting:
 
 1. `/tools` endpoints are rate-limited by default (in-memory fixed window).
 2. Configure with `NOSTR_AGENT_API_RATE_LIMIT_MAX` and `NOSTR_AGENT_API_RATE_LIMIT_WINDOW_MS`.
-3. Set `NOSTR_AGENT_API_RATE_LIMIT_MAX=0` to disable.
+3. Client identity defaults to socket IP unless API-key auth is valid for that request.
+4. `NOSTR_AGENT_API_TRUST_PROXY=false` by default (recommended unless behind a trusted proxy).
+5. Set `NOSTR_AGENT_API_RATE_LIMIT_MAX=0` to disable.
+
+Request body limits:
+
+1. Tool-call request bodies are capped by `NOSTR_AGENT_API_MAX_BODY_BYTES` (default `1048576` / 1 MiB).
+2. Oversized payloads return `413` with `error.code = "payload_too_large"`.
 
 Audit logging:
 
@@ -162,8 +169,10 @@ Primary env vars:
 6. `NOSTR_AGENT_API_RATE_LIMIT_WINDOW_MS` (optional; default `60000`)
 7. `NOSTR_AGENT_API_AUDIT_LOG_ENABLED` (optional; default `true`)
 8. `NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES` (optional; default `true`)
-9. `NOSTR_MCP_COMMAND`
-10. `NOSTR_MCP_ARGS`
+9. `NOSTR_AGENT_API_TRUST_PROXY` (optional; default `false`)
+10. `NOSTR_AGENT_API_MAX_BODY_BYTES` (optional; default `1048576`)
+11. `NOSTR_MCP_COMMAND`
+12. `NOSTR_MCP_ARGS`
 
 ## MCP Client Setup (Optional)
 

@@ -15,6 +15,8 @@ type ApiOptions = {
   rateLimitWindowMs: number;
   auditLogEnabled: boolean;
   auditLogIncludeBodies: boolean;
+  trustProxy: boolean;
+  maxBodyBytes: number;
 };
 
 type ApiErrorPayload = {
@@ -108,7 +110,7 @@ function printApiHelp() {
 
 Config precedence:
   1. CLI flags (--host, --port)
-  2. Environment vars (NOSTR_AGENT_API_HOST, NOSTR_AGENT_API_PORT, NOSTR_AGENT_API_KEY, NOSTR_AGENT_API_RATE_LIMIT_MAX, NOSTR_AGENT_API_RATE_LIMIT_WINDOW_MS, NOSTR_AGENT_API_AUDIT_LOG_ENABLED, NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES)
+  2. Environment vars (NOSTR_AGENT_API_HOST, NOSTR_AGENT_API_PORT, NOSTR_AGENT_API_KEY, NOSTR_AGENT_API_RATE_LIMIT_MAX, NOSTR_AGENT_API_RATE_LIMIT_WINDOW_MS, NOSTR_AGENT_API_AUDIT_LOG_ENABLED, NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES, NOSTR_AGENT_API_TRUST_PROXY, NOSTR_AGENT_API_MAX_BODY_BYTES)
   3. Defaults (127.0.0.1:3030)`);
 }
 
@@ -133,6 +135,14 @@ function parseApiOptions(args: string[]): ApiOptions {
     process.env.NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES?.trim() || "true",
     "NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES",
   );
+  const trustProxy = parseBoolean(
+    process.env.NOSTR_AGENT_API_TRUST_PROXY?.trim() || "false",
+    "NOSTR_AGENT_API_TRUST_PROXY",
+  );
+  const maxBodyBytes = parsePositiveInteger(
+    process.env.NOSTR_AGENT_API_MAX_BODY_BYTES?.trim() || "1048576",
+    "NOSTR_AGENT_API_MAX_BODY_BYTES",
+  );
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -148,6 +158,8 @@ function parseApiOptions(args: string[]): ApiOptions {
         rateLimitWindowMs,
         auditLogEnabled,
         auditLogIncludeBodies,
+        trustProxy,
+        maxBodyBytes,
       };
     }
 
@@ -179,6 +191,8 @@ function parseApiOptions(args: string[]): ApiOptions {
     rateLimitWindowMs,
     auditLogEnabled,
     auditLogIncludeBodies,
+    trustProxy,
+    maxBodyBytes,
   };
 }
 
@@ -197,11 +211,51 @@ function sendJson(
   res.end(body);
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function readJsonBody(
+  req: IncomingMessage,
+  maxBodyBytes: number,
+): Promise<Record<string, unknown>> {
   const chunks: Uint8Array[] = [];
+  const contentLengthHeader = getHeaderValue(req.headers["content-length"])?.trim();
+  if (contentLengthHeader) {
+    const contentLength = Number(contentLengthHeader);
+    if (!Number.isFinite(contentLength) || contentLength < 0) {
+      throw new ApiHttpError(
+        400,
+        "invalid_request",
+        "Invalid content-length header.",
+      );
+    }
+    if (contentLength > maxBodyBytes) {
+      throw new ApiHttpError(
+        413,
+        "payload_too_large",
+        `Request body exceeds maximum size of ${maxBodyBytes} bytes.`,
+        {
+          maxBodyBytes,
+          contentLength,
+        },
+      );
+    }
+  }
+
+  let totalBytes = 0;
 
   for await (const chunk of req) {
-    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    const normalized = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+    totalBytes += normalized.byteLength;
+    if (totalBytes > maxBodyBytes) {
+      throw new ApiHttpError(
+        413,
+        "payload_too_large",
+        `Request body exceeds maximum size of ${maxBodyBytes} bytes.`,
+        {
+          maxBodyBytes,
+          receivedBytes: totalBytes,
+        },
+      );
+    }
+    chunks.push(normalized);
   }
 
   if (chunks.length === 0) {
@@ -452,22 +506,31 @@ class FixedWindowRateLimiter {
   }
 }
 
-function getClientIdentifier(req: IncomingMessage, requestApiKey?: string): string {
+function getClientIdentifier(
+  req: IncomingMessage,
+  options: {
+    requestApiKey?: string;
+    trustProxy: boolean;
+  },
+): string {
+  const { requestApiKey, trustProxy } = options;
   if (requestApiKey) {
     return `api-key:${requestApiKey}`;
   }
 
-  const forwardedFor = getHeaderValue(req.headers["x-forwarded-for"]);
-  if (forwardedFor) {
-    const first = forwardedFor.split(",")[0]?.trim();
-    if (first) {
-      return `ip:${first}`;
+  if (trustProxy) {
+    const forwardedFor = getHeaderValue(req.headers["x-forwarded-for"]);
+    if (forwardedFor) {
+      const first = forwardedFor.split(",")[0]?.trim();
+      if (first) {
+        return `ip:${first}`;
+      }
     }
-  }
 
-  const realIp = getHeaderValue(req.headers["x-real-ip"])?.trim();
-  if (realIp) {
-    return `ip:${realIp}`;
+    const realIp = getHeaderValue(req.headers["x-real-ip"])?.trim();
+    if (realIp) {
+      return `ip:${realIp}`;
+    }
   }
 
   const remoteAddress = req.socket.remoteAddress?.trim();
@@ -578,7 +641,10 @@ export async function runApi(args: string[]): Promise<void> {
         const validatedApiKey = options.apiKey && requestApiKey === options.apiKey
           ? requestApiKey
           : undefined;
-        const clientIdentifier = getClientIdentifier(req, validatedApiKey);
+        const clientIdentifier = getClientIdentifier(req, {
+          requestApiKey: validatedApiKey,
+          trustProxy: options.trustProxy,
+        });
         const rateLimit = rateLimiter.check(clientIdentifier);
 
         res.setHeader("x-ratelimit-limit", String(rateLimit.limit));
@@ -632,7 +698,7 @@ export async function runApi(args: string[]): Promise<void> {
           return;
         }
 
-        const argsPayload = await readJsonBody(req);
+        const argsPayload = await readJsonBody(req, options.maxBodyBytes);
         requestBodyForAudit = argsPayload;
         const result = await managed.client.callTool({
           name: toolName,
