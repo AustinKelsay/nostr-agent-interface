@@ -12,7 +12,7 @@ Use one of these forms:
 4. `nostr-agent-interface cli <toolName> --stdin [--json]`
 5. `nostr-agent-interface cli call <toolName> ...` (legacy-compatible)
 
-`<toolName>` is any canonical tool from `list-tools` (currently 40 tools).
+`<toolName>` is any canonical tool from `list-tools`; use `list-tools` for the current set.
 
 ## Discovery Workflow
 
@@ -119,4 +119,18 @@ nostr-agent-interface cli sendDmNip44 \
   --private-key nsec... \
   --recipient-pubkey npub... \
   --content "hi"
+```
+
+## Security Note (Private Keys)
+
+Avoid passing secrets with CLI flags like `--private-key`; command-line args can be exposed via shell history and process listings.
+
+Prefer `--stdin` with a full JSON payload so sensitive values flow through standard input instead of argv:
+
+```bash
+{
+  printf '{"privateKey":"'
+  tr -d '\n' < /secure/path/private-key.txt
+  printf '","content":"hello nostr"}'
+} | nostr-agent-interface cli postNote --stdin --json
 ```

@@ -346,7 +346,7 @@ function parseDirectToolArgs(args: string[], tool: CliToolDefinition): ToolComma
         throw new Error(`Missing value for --${optionName}`);
       }
 
-      if (typeof nextArg === "string" && canConsumeNext) {
+      if (canConsumeNext) {
         optionValue = nextArg;
         i += 1;
       }
