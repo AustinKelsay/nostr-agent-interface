@@ -41,6 +41,24 @@ curl -s http://127.0.0.1:3030/tools/getProfile \
   -d '{"pubkey":"npub..."}'
 ```
 
+Versioned compatibility route:
+
+```bash
+curl -s http://127.0.0.1:3030/v1/tools/getProfile \
+  -X POST \
+  -H 'content-type: application/json' \
+  -d '{"pubkey":"npub..."}'
+```
+
+Optional API auth:
+
+```bash
+NOSTR_AGENT_API_KEY=your-token nostr-agent-interface api --host 127.0.0.1 --port 3030
+
+curl -s http://127.0.0.1:3030/tools \
+  -H 'x-api-key: your-token'
+```
+
 ### MCP
 
 ```bash
@@ -66,8 +84,13 @@ Relevant env vars:
 1. `NOSTR_DEFAULT_RELAYS`
 2. `NOSTR_AGENT_API_HOST`
 3. `NOSTR_AGENT_API_PORT`
-4. `NOSTR_MCP_COMMAND`
-5. `NOSTR_MCP_ARGS`
+4. `NOSTR_AGENT_API_KEY` (optional)
+5. `NOSTR_AGENT_API_RATE_LIMIT_MAX` (optional)
+6. `NOSTR_AGENT_API_RATE_LIMIT_WINDOW_MS` (optional)
+7. `NOSTR_AGENT_API_AUDIT_LOG_ENABLED` (optional)
+8. `NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES` (optional)
+9. `NOSTR_MCP_COMMAND`
+10. `NOSTR_MCP_ARGS`
 
 API integrations should expect standardized error payloads:
 

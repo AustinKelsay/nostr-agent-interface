@@ -78,6 +78,16 @@ curl -s http://127.0.0.1:3030/tools/getProfile \
   -d '{"pubkey":"npub..."}'
 ```
 
+API (key-protected):
+
+```bash
+curl -s http://127.0.0.1:3030/tools/getProfile \
+  -X POST \
+  -H 'content-type: application/json' \
+  -H 'authorization: Bearer your-token' \
+  -d '{"pubkey":"npub..."}'
+```
+
 ## 6) Error Handling
 
 On failure:
@@ -85,7 +95,8 @@ On failure:
 1. Validate arg shape against `GET /tools`.
 2. Verify key format (`hex` vs `npub`/`nsec`).
 3. Retry once with explicit relays if supported.
-4. Report tool name + sanitized args + error payload.
+4. If `error.code` is `rate_limited`, honor `retry-after` before retry.
+5. Report tool name + sanitized args + error payload.
 
 ## 7) Lineage Guidance
 

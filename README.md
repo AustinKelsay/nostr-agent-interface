@@ -48,11 +48,43 @@ curl -s http://127.0.0.1:3030/tools/getProfile \
   -d '{"pubkey":"npub..."}'
 ```
 
+Optional API auth:
+
+```bash
+NOSTR_AGENT_API_KEY=your-token nostr-agent-interface api --host 127.0.0.1 --port 3030
+
+curl -s http://127.0.0.1:3030/tools \
+  -H 'x-api-key: your-token'
+```
+
+Rate limiting:
+
+1. `/tools` endpoints are rate-limited by default (in-memory fixed window).
+2. Configure with `NOSTR_AGENT_API_RATE_LIMIT_MAX` and `NOSTR_AGENT_API_RATE_LIMIT_WINDOW_MS`.
+3. Client identity defaults to socket IP unless API-key auth is valid for that request.
+4. `NOSTR_AGENT_API_TRUST_PROXY=false` by default (recommended unless behind a trusted proxy).
+5. Set `NOSTR_AGENT_API_RATE_LIMIT_MAX=0` to disable.
+
+Request body limits:
+
+1. Tool-call request bodies are capped by `NOSTR_AGENT_API_MAX_BODY_BYTES` (default `1048576` / 1 MiB).
+2. Oversized payloads return `413` with `error.code = "payload_too_large"`.
+
+Audit logging:
+
+1. API emits structured JSON audit logs with `requestId` correlation.
+2. Sensitive headers/body fields are redacted.
+3. Configure with `NOSTR_AGENT_API_AUDIT_LOG_ENABLED` and `NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES`.
+4. For production defaults, see `docs/api.md` ("Production Defaults").
+
 Endpoints:
 
 1. `GET /health`
 2. `GET /tools`
 3. `POST /tools/:toolName`
+4. `GET /v1/health`
+5. `GET /v1/tools`
+6. `POST /v1/tools/:toolName`
 
 ### MCP (optional)
 
@@ -132,8 +164,15 @@ Primary env vars:
 1. `NOSTR_DEFAULT_RELAYS`
 2. `NOSTR_AGENT_API_HOST`
 3. `NOSTR_AGENT_API_PORT`
-4. `NOSTR_MCP_COMMAND`
-5. `NOSTR_MCP_ARGS`
+4. `NOSTR_AGENT_API_KEY` (optional; protects `/tools` endpoints)
+5. `NOSTR_AGENT_API_RATE_LIMIT_MAX` (optional; default `120`)
+6. `NOSTR_AGENT_API_RATE_LIMIT_WINDOW_MS` (optional; default `60000`)
+7. `NOSTR_AGENT_API_AUDIT_LOG_ENABLED` (optional; default `true`)
+8. `NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES` (optional; default `true`)
+9. `NOSTR_AGENT_API_TRUST_PROXY` (optional; default `false`)
+10. `NOSTR_AGENT_API_MAX_BODY_BYTES` (optional; default `1048576`)
+11. `NOSTR_MCP_COMMAND`
+12. `NOSTR_MCP_ARGS`
 
 ## MCP Client Setup (Optional)
 
@@ -149,10 +188,11 @@ Sample config file: `claude_desktop_config.sample.json`
 1. `llm/README.md`
 2. `llm/tool-catalog.md`
 3. `llm/playbook.md`
-4. `docs/testing.md`
-5. `profile/README.md`
-6. `note/README.md`
-7. `zap/README.md`
+4. `docs/api.md`
+5. `docs/testing.md`
+6. `profile/README.md`
+7. `note/README.md`
+8. `zap/README.md`
 
 ## Development
 

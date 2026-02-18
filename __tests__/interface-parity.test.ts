@@ -166,18 +166,22 @@ describe("Interface parity (MCP, CLI, API)", () => {
     const proc = apiProcess;
     apiProcess = undefined;
 
-    if (!proc.killed) {
+    if (proc.exitCode === null) {
       proc.kill("SIGTERM");
     }
 
     await new Promise((resolve) => {
-      proc.once("exit", () => resolve(undefined));
-      setTimeout(() => {
-        if (!proc.killed) {
+      const forceKillTimer = setTimeout(() => {
+        if (proc.exitCode === null) {
           proc.kill("SIGKILL");
         }
         resolve(undefined);
       }, 1500);
+
+      proc.once("exit", () => {
+        clearTimeout(forceKillTimer);
+        resolve(undefined);
+      });
     });
   });
 
