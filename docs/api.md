@@ -148,7 +148,7 @@ List tools:
 
 ```bash
 curl -s http://127.0.0.1:3030/tools \
-  -H 'x-api-key: your-token'
+  -H 'x-api-key: API_KEY_EXAMPLE'
 ```
 
 Call tool:
@@ -157,8 +157,8 @@ Call tool:
 curl -s http://127.0.0.1:3030/tools/getProfile \
   -X POST \
   -H 'content-type: application/json' \
-  -H 'authorization: Bearer your-token' \
-  -d '{"pubkey":"npub..."}'
+  -H 'Authorization: Bearer FAKE_BEARER_TOKEN_DO_NOT_USE' \
+  -d '{"pubkey":"npub_example_fake"}'
 ```
 
 ## Error Codes
