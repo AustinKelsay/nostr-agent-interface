@@ -3,7 +3,7 @@
     "nostr": {
       "command": "node",
       "args": [
-        "/Users/plebdev/Desktop/code/nostr-agent-interface/build/app/index.js",
+        "build/app/index.js",
         "mcp"
       ]
     }

@@ -91,7 +91,7 @@ API (key-protected):
 curl -s http://127.0.0.1:3030/tools/getProfile \
   -X POST \
   -H 'content-type: application/json' \
-  -H 'authorization: Bearer FAKE_BEARER_TOKEN_DO_NOT_USE' \
+  -H 'authorization: Bearer <BEARER_TOKEN>' \
   -d '{"pubkey":"npub..."}'
 ```
 
