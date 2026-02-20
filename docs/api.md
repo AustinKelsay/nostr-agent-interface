@@ -144,6 +144,20 @@ NOSTR_AGENT_API_MAX_BODY_BYTES=1048576 \
 nostr-agent-interface api --host 127.0.0.1 --port 3030
 ```
 
+## Testing Coverage
+
+Primary suites:
+
+1. `__tests__/api-core.test.ts` for option parsing, sanitization helpers, in-memory request handling, and signal-driven shutdown.
+2. `__tests__/api-errors.test.ts` for standardized error envelopes and perimeter failures.
+3. `__tests__/api-audit-logging.test.ts` for structured log emission and redaction guarantees.
+
+Targeted run:
+
+```bash
+bun test __tests__/api-core.test.ts __tests__/api-errors.test.ts __tests__/api-audit-logging.test.ts
+```
+
 ## Request Examples
 
 List tools:

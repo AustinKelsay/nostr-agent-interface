@@ -121,6 +121,198 @@ if (typeof globalThis.WebSocket === 'undefined') {
   (globalThis as any).WebSocket = WebSocket;
 }
 
+export function normalizeAnonymousZapErrorMessage(error: unknown): string {
+  let errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+  if (errorMessage.includes("ENOTFOUND") || errorMessage.includes("ETIMEDOUT")) {
+    return `Could not connect to the Lightning service. This might be a temporary network issue or the service might be down. Error: ${errorMessage}`;
+  }
+  if (errorMessage.includes("Timeout")) {
+    return "The operation timed out. This might be due to slow relays or network connectivity issues.";
+  }
+  return errorMessage;
+}
+
+export function buildSentZapsResponseText(params: {
+  potentialSentZaps: NostrEvent[] | null | undefined;
+  hexPubkey: string;
+  displayPubkey: string;
+  limit: number;
+  validateReceipts?: boolean;
+  debug?: boolean;
+}): string {
+  const { potentialSentZaps, hexPubkey, displayPubkey, limit, validateReceipts, debug } = params;
+
+  if (!potentialSentZaps || potentialSentZaps.length === 0) {
+    return "No zap receipts found to analyze";
+  }
+
+  let processedZaps: any[] = [];
+  let invalidCount = 0;
+  let nonSentCount = 0;
+
+  if (debug) {
+    console.error(`Processing ${potentialSentZaps.length} potential sent zaps...`);
+  }
+
+  for (const zap of potentialSentZaps) {
+    try {
+      const processedZap = processZapReceipt(zap as ZapReceipt, hexPubkey);
+
+      if (processedZap.direction !== 'sent' && processedZap.direction !== 'self') {
+        if (debug) {
+          console.error(`Skipping zap ${zap.id.slice(0, 8)}... with direction ${processedZap.direction}`);
+        }
+        nonSentCount++;
+        continue;
+      }
+
+      if (validateReceipts) {
+        const validationResult = validateZapReceipt(zap);
+        if (!validationResult.valid) {
+          if (debug) {
+            console.error(`Invalid zap receipt ${zap.id.slice(0, 8)}...: ${validationResult.reason}`);
+          }
+          invalidCount++;
+          continue;
+        }
+      }
+
+      processedZaps.push(processedZap);
+    } catch (error) {
+      if (debug) {
+        console.error(`Error processing zap ${zap.id.slice(0, 8)}...`, error);
+      }
+    }
+  }
+
+  const uniqueZaps = new Map<string, any>();
+  processedZaps.forEach(zap => uniqueZaps.set(zap.id, zap));
+  processedZaps = Array.from(uniqueZaps.values());
+
+  if (processedZaps.length === 0) {
+    let message = `No zaps sent by ${displayPubkey} were found.`;
+    if (invalidCount > 0 || nonSentCount > 0) {
+      message += ` (${invalidCount} invalid zaps and ${nonSentCount} non-sent zaps were filtered out)`;
+    }
+    message += " This could be because:\n1. The user hasn't sent any zaps\n2. The zap receipts don't properly contain the sender's pubkey\n3. The relays queried don't have this data";
+    return message;
+  }
+
+  processedZaps.sort((a, b) => {
+    if (b.created_at !== a.created_at) return b.created_at - a.created_at;
+    return String(b.id ?? "").localeCompare(String(a.id ?? ""));
+  });
+
+  processedZaps = processedZaps.slice(0, limit);
+  const totalSats = processedZaps.reduce((sum, zap) => sum + (zap.amountSats || 0), 0);
+
+  if (debug && processedZaps.length > 0) {
+    const firstZap = processedZaps[0];
+    console.error("Sample sent zap:", JSON.stringify(firstZap, null, 2));
+  }
+
+  const formattedZaps = processedZaps.map(zap => formatZapReceipt(zap, hexPubkey)).join("\n");
+  return `Found ${processedZaps.length} zaps sent by ${displayPubkey}.\nTotal sent: ${totalSats} sats\n\n${formattedZaps}`;
+}
+
+export function buildAllZapsResponseText(params: {
+  allZaps: NostrEvent[];
+  hexPubkey: string;
+  displayPubkey: string;
+  limit: number;
+  validateReceipts?: boolean;
+  debug?: boolean;
+}): string {
+  const { allZaps, hexPubkey, displayPubkey, limit, validateReceipts, debug } = params;
+
+  if (allZaps.length === 0) {
+    return `No zaps found for ${displayPubkey}. Try specifying different relays that might have the data.`;
+  }
+
+  if (debug) {
+    console.error(`Retrieved ${allZaps.length} total zaps before deduplication`);
+  }
+
+  const uniqueZapsMap = new Map<string, NostrEvent>();
+  allZaps.forEach(zap => uniqueZapsMap.set(zap.id, zap));
+  const uniqueZaps = Array.from(uniqueZapsMap.values());
+
+  if (debug) {
+    console.error(`Deduplicated to ${uniqueZaps.length} unique zaps`);
+  }
+
+  let processedZaps: any[] = [];
+  let invalidCount = 0;
+  let irrelevantCount = 0;
+
+  for (const zap of uniqueZaps) {
+    try {
+      const processedZap = processZapReceipt(zap as ZapReceipt, hexPubkey);
+
+      if (processedZap.direction === 'unknown') {
+        if (debug) {
+          console.error(`Skipping irrelevant zap ${zap.id.slice(0, 8)}...`);
+        }
+        irrelevantCount++;
+        continue;
+      }
+
+      if (validateReceipts) {
+        const validationResult = validateZapReceipt(zap);
+        if (!validationResult.valid) {
+          if (debug) {
+            console.error(`Invalid zap receipt ${zap.id.slice(0, 8)}...: ${validationResult.reason}`);
+          }
+          invalidCount++;
+          continue;
+        }
+      }
+
+      processedZaps.push(processedZap);
+    } catch (error) {
+      if (debug) {
+        console.error(`Error processing zap ${zap.id.slice(0, 8)}...`, error);
+      }
+    }
+  }
+
+  if (processedZaps.length === 0) {
+    let message = `No relevant zaps found for ${displayPubkey}.`;
+    if (invalidCount > 0 || irrelevantCount > 0) {
+      message += ` (${invalidCount} invalid zaps and ${irrelevantCount} irrelevant zaps were filtered out)`;
+    }
+    return message;
+  }
+
+  processedZaps.sort((a, b) => {
+    if (b.created_at !== a.created_at) return b.created_at - a.created_at;
+    return String(b.id ?? "").localeCompare(String(a.id ?? ""));
+  });
+
+  const sentZaps = processedZaps.filter(zap => zap.direction === 'sent');
+  const receivedZaps = processedZaps.filter(zap => zap.direction === 'received');
+  const selfZaps = processedZaps.filter(zap => zap.direction === 'self');
+
+  const totalSent = sentZaps.reduce((sum, zap) => sum + (zap.amountSats || 0), 0);
+  const totalReceived = receivedZaps.reduce((sum, zap) => sum + (zap.amountSats || 0), 0);
+  const totalSelfZaps = selfZaps.reduce((sum, zap) => sum + (zap.amountSats || 0), 0);
+
+  processedZaps = processedZaps.slice(0, limit);
+  const formattedZaps = processedZaps.map(zap => formatZapReceipt(zap, hexPubkey)).join("\n");
+
+  const summary = [
+    `Zap Summary for ${displayPubkey}:`,
+    `- ${sentZaps.length} zaps sent (${totalSent} sats)`,
+    `- ${receivedZaps.length} zaps received (${totalReceived} sats)`,
+    `- ${selfZaps.length} self-zaps (${totalSelfZaps} sats)`,
+    `- Net balance: ${totalReceived - totalSent} sats`,
+    `\nShowing ${processedZaps.length} most recent zaps:\n`
+  ].join("\n");
+
+  return `${summary}\n${formattedZaps}`;
+}
+
 export function createNostrMcpServer(): McpServer {
   // Create server instance
   const server = new McpServer({
@@ -515,7 +707,7 @@ server.tool(
         }
       }
       
-      if (!potentialSentZaps || potentialSentZaps.length === 0) {
+	      if (!potentialSentZaps || potentialSentZaps.length === 0) {
           return {
             content: [
               {
@@ -525,98 +717,21 @@ server.tool(
             ],
           };
         }
-        
-      // Process and filter zaps
-      let processedZaps: any[] = [];
-      let invalidCount = 0;
-      let nonSentCount = 0;
-      
-      if (debug) {
-        console.error(`Processing ${potentialSentZaps.length} potential sent zaps...`);
-      }
-      
-      // Process each zap to determine if it was sent by the target pubkey
-      for (const zap of potentialSentZaps) {
-        try {
-          // Process the zap receipt with context of the target pubkey
-          const processedZap = processZapReceipt(zap as ZapReceipt, hexPubkey);
-          
-          // Skip zaps that aren't sent by this pubkey
-          if (processedZap.direction !== 'sent' && processedZap.direction !== 'self') {
-            if (debug) {
-              console.error(`Skipping zap ${zap.id.slice(0, 8)}... with direction ${processedZap.direction}`);
-            }
-            nonSentCount++;
-            continue;
-          }
-          
-          // Validate if requested
-          if (validateReceipts) {
-            const validationResult = validateZapReceipt(zap);
-            if (!validationResult.valid) {
-              if (debug) {
-                console.error(`Invalid zap receipt ${zap.id.slice(0, 8)}...: ${validationResult.reason}`);
-              }
-              invalidCount++;
-              continue;
-            }
-          }
-          
-          processedZaps.push(processedZap);
-          } catch (error) {
-            if (debug) {
-            console.error(`Error processing zap ${zap.id.slice(0, 8)}...`, error);
-          }
-        }
-      }
-      
-      // Deduplicate by zap ID
-      const uniqueZaps = new Map<string, any>();
-      processedZaps.forEach(zap => uniqueZaps.set(zap.id, zap));
-      processedZaps = Array.from(uniqueZaps.values());
-      
-      if (processedZaps.length === 0) {
-        let message = `No zaps sent by ${displayPubkey} were found.`;
-        if (invalidCount > 0 || nonSentCount > 0) {
-          message += ` (${invalidCount} invalid zaps and ${nonSentCount} non-sent zaps were filtered out)`;
-        }
-        message += " This could be because:\n1. The user hasn't sent any zaps\n2. The zap receipts don't properly contain the sender's pubkey\n3. The relays queried don't have this data";
-        
-        return {
-          content: [
-            {
-              type: "text",
-              text: message,
-            },
-          ],
-        };
-      }
-      
-      // Deterministic ordering: newest first, then stable tie-break on id.
-      processedZaps.sort((a, b) => {
-        if (b.created_at !== a.created_at) return b.created_at - a.created_at;
-        return String(b.id ?? "").localeCompare(String(a.id ?? ""));
+
+      const text = buildSentZapsResponseText({
+        potentialSentZaps,
+        hexPubkey,
+        displayPubkey,
+        limit,
+        validateReceipts,
+        debug,
       });
-      
-      // Limit to requested number
-      processedZaps = processedZaps.slice(0, limit);
-      
-      // Calculate total sats sent
-      const totalSats = processedZaps.reduce((sum, zap) => sum + (zap.amountSats || 0), 0);
-      
-      // For debugging, examine the first zap in detail
-      if (debug && processedZaps.length > 0) {
-        const firstZap = processedZaps[0];
-        console.error("Sample sent zap:", JSON.stringify(firstZap, null, 2));
-      }
-      
-      const formattedZaps = processedZaps.map(zap => formatZapReceipt(zap, hexPubkey)).join("\n");
-      
+
       return {
         content: [
           {
             type: "text",
-            text: `Found ${processedZaps.length} zaps sent by ${displayPubkey}.\nTotal sent: ${totalSats} sats\n\n${formattedZaps}`,
+            text,
           },
         ],
       };
@@ -733,122 +848,20 @@ server.tool(
         }
       });
       
-      if (allZaps.length === 0) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `No zaps found for ${displayPubkey}. Try specifying different relays that might have the data.`,
-            },
-          ],
-        };
-      }
-      
-      if (debug) {
-        console.error(`Retrieved ${allZaps.length} total zaps before deduplication`);
-      }
-      
-      // Deduplicate by zap ID
-      const uniqueZapsMap = new Map<string, NostrEvent>();
-      allZaps.forEach(zap => uniqueZapsMap.set(zap.id, zap));
-      const uniqueZaps = Array.from(uniqueZapsMap.values());
-      
-      if (debug) {
-        console.error(`Deduplicated to ${uniqueZaps.length} unique zaps`);
-      }
-      
-      // Process each zap to determine its relevance to the target pubkey
-      let processedZaps: any[] = [];
-      let invalidCount = 0;
-      let irrelevantCount = 0;
-      
-      for (const zap of uniqueZaps) {
-        try {
-          // Process the zap with the target pubkey as context
-          const processedZap = processZapReceipt(zap as ZapReceipt, hexPubkey);
-          
-          // Skip zaps that are neither sent nor received by this pubkey
-          if (processedZap.direction === 'unknown') {
-              if (debug) {
-              console.error(`Skipping irrelevant zap ${zap.id.slice(0, 8)}...`);
-            }
-            irrelevantCount++;
-            continue;
-          }
-          
-          // Validate if requested
-          if (validateReceipts) {
-            const validationResult = validateZapReceipt(zap);
-            if (!validationResult.valid) {
-            if (debug) {
-                console.error(`Invalid zap receipt ${zap.id.slice(0, 8)}...: ${validationResult.reason}`);
-            }
-              invalidCount++;
-              continue;
-          }
-          }
-        
-          processedZaps.push(processedZap);
-        } catch (error) {
-        if (debug) {
-            console.error(`Error processing zap ${zap.id.slice(0, 8)}...`, error);
-          }
-        }
-      }
-      
-      if (processedZaps.length === 0) {
-        let message = `No relevant zaps found for ${displayPubkey}.`;
-        if (invalidCount > 0 || irrelevantCount > 0) {
-          message += ` (${invalidCount} invalid zaps and ${irrelevantCount} irrelevant zaps were filtered out)`;
-        }
-        
-        return {
-          content: [
-            {
-              type: "text",
-              text: message,
-            },
-          ],
-        };
-      }
-      
-      // Deterministic ordering: newest first, then stable tie-break on id.
-      processedZaps.sort((a, b) => {
-        if (b.created_at !== a.created_at) return b.created_at - a.created_at;
-        return String(b.id ?? "").localeCompare(String(a.id ?? ""));
+      const text = buildAllZapsResponseText({
+        allZaps,
+        hexPubkey,
+        displayPubkey,
+        limit,
+        validateReceipts,
+        debug,
       });
-      
-      // Calculate statistics: sent, received, and self zaps
-      const sentZaps = processedZaps.filter(zap => zap.direction === 'sent');
-      const receivedZaps = processedZaps.filter(zap => zap.direction === 'received');
-      const selfZaps = processedZaps.filter(zap => zap.direction === 'self');
-      
-      // Calculate total sats
-      const totalSent = sentZaps.reduce((sum, zap) => sum + (zap.amountSats || 0), 0);
-      const totalReceived = receivedZaps.reduce((sum, zap) => sum + (zap.amountSats || 0), 0);
-      const totalSelfZaps = selfZaps.reduce((sum, zap) => sum + (zap.amountSats || 0), 0);
-      
-      // Limit to requested number for display
-      processedZaps = processedZaps.slice(0, limit);
-      
-      // Format the zaps with the pubkey context
-      const formattedZaps = processedZaps.map(zap => formatZapReceipt(zap, hexPubkey)).join("\n");
-      
-      // Prepare summary statistics
-      const summary = [
-        `Zap Summary for ${displayPubkey}:`,
-        `- ${sentZaps.length} zaps sent (${totalSent} sats)`,
-        `- ${receivedZaps.length} zaps received (${totalReceived} sats)`,
-        `- ${selfZaps.length} self-zaps (${totalSelfZaps} sats)`,
-        `- Net balance: ${totalReceived - totalSent} sats`,
-        `\nShowing ${processedZaps.length} most recent zaps:\n`
-      ].join("\n");
-      
+
       return {
         content: [
           {
             type: "text",
-            text: `${summary}\n${formattedZaps}`,
+            text,
           },
         ],
       };
@@ -1292,15 +1305,7 @@ server.tool(
       };
     } catch (error) {
       console.error("Error in sendAnonymousZap tool:", error);
-      
-      let errorMessage = error instanceof Error ? error.message : "Unknown error";
-      
-      // Provide a more helpful message for common errors
-      if (errorMessage.includes("ENOTFOUND") || errorMessage.includes("ETIMEDOUT")) {
-        errorMessage = `Could not connect to the Lightning service. This might be a temporary network issue or the service might be down. Error: ${errorMessage}`;
-      } else if (errorMessage.includes("Timeout")) {
-        errorMessage = "The operation timed out. This might be due to slow relays or network connectivity issues.";
-      }
+      const errorMessage = normalizeAnonymousZapErrorMessage(error);
       
       return {
         content: [

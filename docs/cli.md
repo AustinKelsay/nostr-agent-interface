@@ -92,6 +92,19 @@ Required schema fields are validated before tool execution.
 2. Unknown fields fail fast (schema-aware option validation).
 3. `list-tools --json` and `artifacts/tools.json` are the canonical contract sources.
 
+## Testing Coverage
+
+Primary suites:
+
+1. `__tests__/cli-core.test.ts` for in-process parser/dispatcher behavior (`runCli`).
+2. `__tests__/cli-ux.test.ts` for spawned-process UX behavior (stdout/stderr, help, exit codes).
+
+Targeted run:
+
+```bash
+bun test __tests__/cli-core.test.ts __tests__/cli-ux.test.ts
+```
+
 ## Examples by Workflow
 
 Profile read:

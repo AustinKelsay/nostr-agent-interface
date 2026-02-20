@@ -217,8 +217,14 @@ Sample config file: `claude_desktop_config.sample.json`
 bun run build
 bun test
 bun run test:parity
+bun test __tests__/cli-core.test.ts __tests__/cli-ux.test.ts
+bun test __tests__/api-core.test.ts __tests__/api-errors.test.ts __tests__/api-audit-logging.test.ts
+bun test __tests__/mcp-dispatch.test.ts
+bun test __tests__/zap-tools-tests.test.ts
 bun run check:docs
 ```
+
+Detailed suite coverage and troubleshooting by surface: `docs/testing.md`.
 
 ## Lineage Summary
 

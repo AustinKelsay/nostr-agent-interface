@@ -611,7 +611,7 @@ export const sendAnonymousZapToolConfig = {
 };
 
 // Helper functions for the sendAnonymousZap tool
-function isValidUrl(urlString: string): boolean {
+export function isValidUrl(urlString: string): boolean {
   try {
     const url = new URL(urlString);
     return url.protocol === 'https:' || url.protocol === 'http:';
@@ -620,33 +620,33 @@ function isValidUrl(urlString: string): boolean {
   }
 }
 
-function extractLnurlMetadata(lnurlData: LnurlPayResponse): { payeeName?: string, payeeEmail?: string } {
-  if (!lnurlData.metadata) return {};
-  
-  try {
-    const metadata = JSON.parse(lnurlData.metadata);
-    if (!Array.isArray(metadata)) return {};
-    
-    let payeeName: string | undefined;
-    let payeeEmail: string | undefined;
-    
-    // Extract information from metadata as per LUD-06
-    for (const entry of metadata) {
-      if (Array.isArray(entry) && entry.length >= 2) {
-        if (entry[0] === "text/plain") {
-          payeeName = entry[1] as string;
-        }
-        if (entry[0] === "text/email" || entry[0] === "text/identifier") {
-          payeeEmail = entry[1] as string;
-        }
-      }
-    }
-    
-    return { payeeName, payeeEmail };
-  } catch (error) {
-    console.error("Error parsing LNURL metadata:", error);
-    return {};
-  }
+function asNonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export function extractLnurlFromProfileMetadata(metadata: Record<string, unknown>): string | null {
+  const direct =
+    asNonEmptyString(metadata.lud16) ||
+    asNonEmptyString(metadata.lud06) ||
+    asNonEmptyString(metadata.LUD16) ||
+    asNonEmptyString(metadata.LUD06) ||
+    asNonEmptyString(metadata.Lud16) ||
+    asNonEmptyString(metadata.Lud06) ||
+    asNonEmptyString(metadata.lightning) ||
+    asNonEmptyString(metadata.LIGHTNING) ||
+    asNonEmptyString(metadata.lightningAddress);
+
+  if (direct) return direct;
+
+  const fallbackKey = Object.keys(metadata).find((key) => {
+    const lower = key.toLowerCase();
+    return lower.startsWith("lud") || lower.startsWith("lightning");
+  });
+
+  if (!fallbackKey) return null;
+  return asNonEmptyString(metadata[fallbackKey]);
 }
 
 // Helper function to decode bech32-encoded LNURL
@@ -694,6 +694,26 @@ function bech32ToArray(bech32Str: string): Uint8Array {
   }
   
   return result;
+}
+
+export function normalizeLnurlToUrl(input: string): string {
+  let lnurl = input;
+
+  if (lnurl.includes('@')) {
+    const [name, domain] = lnurl.split('@');
+    const encodedName = encodeURIComponent(name);
+    lnurl = `https://${domain}/.well-known/lnurlp/${encodedName}`;
+  } else if (lnurl.toLowerCase().startsWith('lnurl')) {
+    const bech32Payload = lnurl.toLowerCase().substring(5);
+    const normalizedPayload = bech32Payload.startsWith("1") ? bech32Payload.substring(1) : bech32Payload;
+    lnurl = Buffer.from(bech32ToArray(normalizedPayload)).toString();
+  }
+
+  if (!lnurl.startsWith('http://') && !lnurl.startsWith('https://')) {
+    lnurl = 'https://' + lnurl;
+  }
+
+  return lnurl;
 }
 
 // Function to prepare an anonymous zap
@@ -815,29 +835,7 @@ export async function prepareAnonymousZap(
       try {
         const metadata = JSON.parse(profile.content);
         
-        // Check standard LUD-16/LUD-06 fields
-        lnurl = metadata.lud16 || metadata.lud06 || null;
-        
-        // Check for alternate capitalizations that some clients might use
-        if (!lnurl) {
-          lnurl = metadata.LUD16 || metadata.LUD06 || 
-                 metadata.Lud16 || metadata.Lud06 || 
-                 metadata.lightning || metadata.LIGHTNING || 
-                 metadata.lightningAddress || 
-                 null;
-        }
-        
-        if (!lnurl) {
-          // Check if there's any key that contains "lud" or "lightning"
-          const ludKey = Object.keys(metadata).find(key => 
-            key.toLowerCase().includes('lud') || 
-            key.toLowerCase().includes('lightning')
-          );
-          
-          if (ludKey) {
-            lnurl = metadata[ludKey];
-          }
-        }
+        lnurl = extractLnurlFromProfileMetadata(metadata);
         
         if (!lnurl) {
           return {
@@ -847,29 +845,14 @@ export async function prepareAnonymousZap(
           };
         }
         
-        // If it's a lightning address (contains @), convert to LNURL
-        if (lnurl.includes('@')) {
-          const [name, domain] = lnurl.split('@');
-          // Per LUD-16, properly encode username with encodeURIComponent
-          const encodedName = encodeURIComponent(name);
-          lnurl = `https://${domain}/.well-known/lnurlp/${encodedName}`;
-        } else if (lnurl.toLowerCase().startsWith('lnurl')) {
-          // Decode bech32 LNURL to URL
-          try {
-            lnurl = Buffer.from(bech32ToArray(lnurl.toLowerCase().substring(5))).toString();
-          } catch (e) {
-            return {
-              invoice: "",
-              success: false,
-              message: "Invalid LNURL format"
-            };
-          }
-        }
-        
-        // Make sure it's HTTP or HTTPS if not already
-        if (!lnurl.startsWith('http://') && !lnurl.startsWith('https://')) {
-          // Default to HTTPS
-          lnurl = 'https://' + lnurl;
+        try {
+          lnurl = normalizeLnurlToUrl(lnurl);
+        } catch {
+          return {
+            invoice: "",
+            success: false,
+            message: "Invalid LNURL format"
+          };
         }
       } catch (error) {
         return {

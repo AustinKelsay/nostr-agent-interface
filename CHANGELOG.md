@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Reframed project documentation around Nostr Agent Interface as an extension of Nostr MCP Server's JARC tool contracts, with CLI/API as preferred operational interfaces and MCP retained as supported compatibility mode.
 - Updated release/process/docs guidance and package metadata links to point to `nostr-agent-interface` repository coordinates.
+- Expanded testing documentation with suite-level coverage mapping for CLI command parsing, API request lifecycle and sanitization, MCP dispatch/schema stability, and zap-processing edge coverage.
 
 ### Added
 - Added lineage and transport metadata to generated `artifacts/tools.json` so downstream consumers can identify interface intent, CLI/API-first preference, and MCP compatibility posture.
@@ -17,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added configurable in-memory rate limiting for API tool endpoints via `NOSTR_AGENT_API_RATE_LIMIT_MAX` and `NOSTR_AGENT_API_RATE_LIMIT_WINDOW_MS`, including standardized `429 rate_limited` responses and rate-limit headers.
 - Added structured API audit logging with request/response events, sensitive-field redaction, and `x-request-id` correlation controls (`NOSTR_AGENT_API_AUDIT_LOG_ENABLED`, `NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES`).
 - Added `/v1` API route compatibility layer (`/v1/health`, `/v1/tools`, `/v1/tools/:toolName`) while preserving existing route support.
+- Added dedicated regression suites for in-process CLI command parsing (`cli-core`), API in-memory request lifecycle and sanitization (`api-core`), and full MCP dispatch/schema stability (`mcp-dispatch`), plus expanded zap-processing edge coverage.
 
 ## [3.0.0] - 2026-02-13
 

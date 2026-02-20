@@ -10,7 +10,7 @@ export const BUILTIN_DEFAULT_RELAYS = [
   "wss://nostr.land"
 ];
 
-function parseEnvRelayList(rawValue: string | undefined): string[] | null {
+export function parseEnvRelayList(rawValue: string | undefined): string[] | null {
   if (!rawValue || rawValue.trim() === "") {
     return null;
   }
