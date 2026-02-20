@@ -1,9 +1,8 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { createServer as createNetServer } from "node:net";
-import type { AddressInfo } from "node:net";
 import { schnorr } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
-import { WebSocket, WebSocketServer } from "ws";
+import { WebSocket } from "ws";
 import { KINDS } from "../utils/constants.js";
 import { NostrRelay } from "../utils/ephemeral-relay.js";
 
@@ -50,21 +49,29 @@ function randomForPort(port: number): number {
 }
 
 async function findHighEphemeralPort(avoid: Set<number>): Promise<number> {
-  for (let attempt = 0; attempt < 50; attempt++) {
-    const server = createNetServer();
-    await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(0, () => resolve());
-    });
+  const startOffset = (Date.now() + process.pid) % PORT_SPAN;
+  for (let attempt = 0; attempt < PORT_SPAN; attempt++) {
+    const port = MIN_PORT + ((startOffset + attempt) % PORT_SPAN);
+    if (avoid.has(port)) {
+      continue;
+    }
 
-    const address = server.address() as AddressInfo | null;
-    const port = address?.port ?? 0;
+    const server = createNetServer();
+    const canUsePort = await new Promise<boolean>((resolve) => {
+      server.once("error", () => resolve(false));
+      server.listen(port, "127.0.0.1", () => resolve(true));
+    });
+    if (!canUsePort) {
+      try {
+        server.close();
+      } catch {
+        // Ignore cleanup errors while probing.
+      }
+      continue;
+    }
 
     await new Promise<void>((resolve) => server.close(() => resolve()));
-
-    if (port >= MIN_PORT && port <= 65535 && !avoid.has(port)) {
-      return port;
-    }
+    return port;
   }
 
   throw new Error("Unable to find a high ephemeral port");
@@ -168,7 +175,7 @@ async function collectUntilEose(ws: WebSocket, subId: string, timeoutMs = 2000):
 
 describe("ephemeral-relay coverage", () => {
   const relaysToClose: NostrRelay[] = [];
-  const serversToClose: WebSocketServer[] = [];
+  const serversToClose: Array<{ close: (callback: () => void) => void }> = [];
 
   afterAll(async () => {
     for (const relay of relaysToClose.reverse()) {
@@ -198,46 +205,32 @@ describe("ephemeral-relay coverage", () => {
   });
 
   test("throws start error when fixed port is already in use", async () => {
-    const blocker = new WebSocketServer({ port: 0 });
+    const occupiedPort = await findHighEphemeralPort(new Set());
+    const blocker = createNetServer();
     serversToClose.push(blocker);
     await new Promise<void>((resolve, reject) => {
       blocker.once("listening", () => resolve());
       blocker.once("error", reject);
+      blocker.listen(occupiedPort, "127.0.0.1");
     });
-
-    const occupiedPort = (blocker.address() as AddressInfo).port;
     const relay = new NostrRelay(occupiedPort);
     await expect(relay.start()).rejects.toThrow();
   });
 
   test("retries a random port when first pick is occupied", async () => {
-    const blocker = new WebSocketServer({ port: 0 });
+    const blockedPort = await findHighEphemeralPort(new Set());
+    const blocker = createNetServer();
     await new Promise<void>((resolve, reject) => {
       blocker.once("listening", () => resolve());
       blocker.once("error", reject);
+      blocker.listen(blockedPort, "127.0.0.1");
     });
-    const blockedPort = (blocker.address() as AddressInfo).port;
-    const freePort = await findHighEphemeralPort(new Set([blockedPort]));
     serversToClose.push(blocker);
 
-    const originalRandom = Math.random;
-    const sequence = [randomForPort(blockedPort), randomForPort(freePort)];
-    let index = 0;
-
-    Math.random = () => {
-      const next = sequence[Math.min(index, sequence.length - 1)];
-      index += 1;
-      return next;
-    };
-
-    try {
-      const relay = new NostrRelay(0);
-      relaysToClose.push(relay);
-      await relay.start();
-      expect(relay.port).toBe(freePort);
-    } finally {
-      Math.random = originalRandom;
-    }
+    const relay = new NostrRelay(0, undefined, undefined, () => randomForPort(blockedPort));
+    relaysToClose.push(relay);
+    await relay.start();
+    expect(relay.port).not.toBe(blockedPort);
   });
 
   test("handles malformed and invalid protocol messages with NOTICE responses", async () => {

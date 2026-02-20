@@ -10,6 +10,7 @@ import { KINDS } from './constants.js'
 const HOST    = 'ws://localhost'
 const DEBUG   = process.env['DEBUG']   === 'true'
 const VERBOSE = process.env['VERBOSE'] === 'true' || DEBUG
+let portSeedCounter = 0
 
 // Only log output mode in non-test environments
 if (process.env.NODE_ENV !== 'test') {
@@ -83,6 +84,8 @@ export class NostrRelay {
   private readonly _purge: number | null
   private readonly _subs: Map<string, Subscription>
   private readonly _requireAuth: boolean
+  private readonly _randomPort: () => number
+  private readonly _hasCustomRandomPort: boolean
 
   private _wss: WebSocketServer | null
   private _cache: SignedEvent[]
@@ -90,7 +93,7 @@ export class NostrRelay {
 
   public conn: number
 
-  constructor(port: number, purge_ival?: number, requireAuth?: boolean) {
+  constructor(port: number, purge_ival?: number, requireAuth?: boolean, randomPort?: () => number) {
     this._cache = []
     this._emitter = new EventEmitter()
     this._port = port
@@ -99,6 +102,8 @@ export class NostrRelay {
     this._wss = null
     this.conn = 0
     this._requireAuth = requireAuth ?? false
+    this._randomPort = randomPort ?? Math.random
+    this._hasCustomRandomPort = Boolean(randomPort)
   }
 
   get cache() {
@@ -131,22 +136,34 @@ export class NostrRelay {
   async start() {
     this._isClosing = false
 
-    // Bun's http server (used by ws) does not reliably support binding to port 0.
-    // If callers pass 0, we pick a random high port and retry on EADDRINUSE.
-    const randomHighPort = () => {
-      // IANA ephemeral range, avoids privileged ports and typical local dev defaults.
-      const min = 49152
-      const max = 65535
-      return Math.floor(min + Math.random() * (max - min + 1))
-    }
+    const minPort = 49152
+    const maxPort = 65535
+    const portSpan = maxPort - minPort + 1
+    const randomHighPort = () => Math.floor(minPort + this._randomPort() * portSpan)
 
-    const maxAttempts = this._port === 0 ? 25 : 1
+    const maxAttempts = this._port === 0 ? 200 : 1
+    const seedOffset = this._hasCustomRandomPort ? 0 : ((portSeedCounter++ * 4099) % portSpan)
+    const basePort =
+      this._port === 0
+        ? minPort + ((randomHighPort() - minPort + seedOffset) % portSpan)
+        : this._port
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const port = this._port === 0 ? randomHighPort() : this._port
+      const port =
+        this._port === 0
+          ? minPort + ((basePort - minPort + attempt) % portSpan)
+          : this._port
 
       // Create a fresh server each attempt.
-      this._wss = new WebSocketServer({ port })
+      try {
+        this._wss = new WebSocketServer({ host: '127.0.0.1', port })
+      } catch (err: any) {
+        const isAddrInUse = err?.code === 'EADDRINUSE'
+        if (this._port === 0 && isAddrInUse) {
+          continue
+        }
+        throw err
+      }
 
       DEBUG && console.log('[ relay ] running on port:', port)
 

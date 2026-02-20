@@ -37,6 +37,8 @@ describe("Profile and Notes Functions", () => {
 
   beforeAll(async () => {
     const keypair = await createKeypair("hex");
+    expect(keypair).toBeDefined();
+    expect(keypair.publicKey).toBeDefined();
     const pubkey = keypair.publicKey!;
     const relays = ["wss://relay.example.com"];
 

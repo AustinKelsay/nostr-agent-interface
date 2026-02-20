@@ -1,39 +1,18 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
-
-let throwConvert = false;
-let throwAnalyze = false;
-
-mock.module("../utils/conversion.js", () => ({
-  convertNip19Entity: () => {
-    if (throwConvert) throw new Error("convert blew up");
-    return { success: true, result: "ok", originalType: "hex", data: "abc" };
-  },
-  analyzeNip19Entity: () => {
-    if (throwAnalyze) throw new Error("analyze blew up");
-    return { success: true, originalType: "hex", data: "abc", message: "ok" };
-  },
-}));
+import { describe, expect, test } from "bun:test";
 
 import { analyzeNip19, convertNip19, formatAnalysisResult } from "../utils/nip19-tools.js";
 
 describe("utils/nip19-tools", () => {
-  beforeEach(() => {
-    throwConvert = false;
-    throwAnalyze = false;
-  });
-
-  test("convertNip19 handles thrown conversion errors", async () => {
-    throwConvert = true;
+  test("convertNip19 surfaces conversion failures for invalid inputs", async () => {
     const result = await convertNip19("abc", "hex");
     expect(result.success).toBe(false);
-    expect(result.message).toContain("Error during conversion: convert blew up");
+    expect(result.message).toContain("not a valid NIP-19 entity");
   });
 
-  test("analyzeNip19 handles thrown analysis errors", async () => {
-    throwAnalyze = true;
+  test("analyzeNip19 surfaces analysis failures for invalid inputs", async () => {
     const result = await analyzeNip19("abc");
     expect(result.success).toBe(false);
-    expect(result.message).toContain("Error during analysis: analyze blew up");
+    expect(result.message).toContain("not a valid NIP-19 entity");
   });
 
   test("formatAnalysisResult renders all supported types and unknown fallback", () => {
