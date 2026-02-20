@@ -112,6 +112,17 @@ describe('Profile Tools', () => {
       expect(result.success).toBe(false);
       expect(result.message).toContain('error');
     });
+
+    it('should reject malformed nsec values before decode', async () => {
+      const result = await createProfile(
+        'nsec1INVALID*',
+        { name: 'Test User' },
+        []
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Invalid nsec format');
+    });
   });
 
   describe('updateProfile', () => {

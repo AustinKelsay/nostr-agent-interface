@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { createManagedMcpClient } from "../app/mcp-client.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport, type StdioServerParameters } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
@@ -9,9 +10,56 @@ const execFileAsync = promisify(execFile);
 const API_HOST = "127.0.0.1";
 const API_PORT = 39000 + Math.floor(Math.random() * 1000);
 const API_BASE_URL = `http://${API_HOST}:${API_PORT}`;
+const MCP_ENTRYPOINT = path.resolve(process.cwd(), "app/index.ts");
+const MCP_SERVER_PROCESS: StdioServerParameters = {
+  command: process.execPath,
+  args: [MCP_ENTRYPOINT, "mcp"],
+  cwd: process.cwd(),
+  stderr: "pipe",
+};
+const MCP_CLIENT_INFO = {
+  name: "nostr-agent-interface-parity-tests",
+  version: "0.1.0",
+};
 
 let apiProcess: ChildProcess | undefined;
 let apiLogs = "";
+
+type ManagedMcpClient = {
+  client: Client;
+  close: () => Promise<void>;
+};
+
+async function createManagedMcpClient(serverProcess: StdioServerParameters = MCP_SERVER_PROCESS): Promise<ManagedMcpClient> {
+  const transport = new StdioClientTransport(serverProcess);
+  const client = new Client(MCP_CLIENT_INFO);
+
+  if (transport.stderr) {
+    transport.stderr.on("data", (chunk: unknown) => {
+      if (typeof chunk === "string") {
+        process.stderr.write(chunk);
+        return;
+      }
+      if (chunk instanceof Uint8Array) {
+        process.stderr.write(chunk);
+      }
+    });
+  }
+
+  try {
+    await client.connect(transport);
+  } catch (error) {
+    await transport.close();
+    throw error;
+  }
+
+  return {
+    client,
+    close: async () => {
+      await Promise.allSettled([client.close(), transport.close()]);
+    },
+  };
+}
 
 function parseJsonFromOutput(output: string): any {
   const trimmed = output.trim();
@@ -166,18 +214,22 @@ describe("Interface parity (MCP, CLI, API)", () => {
     const proc = apiProcess;
     apiProcess = undefined;
 
-    if (!proc.killed) {
+    if (proc.exitCode === null) {
       proc.kill("SIGTERM");
     }
 
     await new Promise((resolve) => {
-      proc.once("exit", () => resolve(undefined));
-      setTimeout(() => {
-        if (!proc.killed) {
+      const forceKillTimer = setTimeout(() => {
+        if (proc.exitCode === null) {
           proc.kill("SIGKILL");
         }
         resolve(undefined);
       }, 1500);
+
+      proc.once("exit", () => {
+        clearTimeout(forceKillTimer);
+        resolve(undefined);
+      });
     });
   });
 

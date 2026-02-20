@@ -85,6 +85,42 @@ describe("CLI UX", () => {
     expect(firstText).toContain("Conversion successful!");
   });
 
+  test("supports direct tool invocation with schema-aware flags", async () => {
+    const result = await runCliProcess([
+      "convertNip19",
+      "--input",
+      "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e",
+      "--target-type",
+      "npub",
+      "--json",
+    ]);
+
+    expect(result.code).toBe(0);
+
+    const parsed = JSON.parse(result.stdout.trim());
+    const firstText = parsed?.content?.[0]?.text ?? "";
+
+    expect(typeof firstText).toBe("string");
+    expect(firstText).toContain("Conversion successful!");
+  });
+
+  test("supports direct tool help", async () => {
+    const result = await runCliProcess(["getProfile", "--help"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Usage:");
+    expect(result.stdout).toContain("getProfile");
+    expect(result.stdout).toContain("--pubkey");
+  });
+
+  test("validates required args for direct tool commands", async () => {
+    const result = await runCliProcess(["convertNip19", "--input", "abc"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("Missing required options for convertNip19");
+    expect(result.stderr).toContain("--target-type");
+  });
+
   test("rejects mixing positional jsonArgs with --stdin", async () => {
     const result = await runCliProcess([
       "call",

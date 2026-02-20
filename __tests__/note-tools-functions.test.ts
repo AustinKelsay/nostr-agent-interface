@@ -1,4 +1,4 @@
-import { mock, describe, it, expect, beforeAll, beforeEach } from 'bun:test';
+import { mock, describe, it, expect, beforeAll, beforeEach, afterAll } from 'bun:test';
 import { generateKeypair } from 'snstr';
 import { NostrEvent } from '../utils/index.js';
 
@@ -36,6 +36,10 @@ describe('Note Tools Functions', () => {
     // Reset mock state between tests
     mockPool.close.mockClear();
     mockPool.publish.mockClear();
+  });
+
+  afterAll(() => {
+    mock.restore();
   });
 
   describe('formatProfile', () => {

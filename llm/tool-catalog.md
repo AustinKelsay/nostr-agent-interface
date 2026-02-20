@@ -1,79 +1,82 @@
 # Tool Catalog (Current)
 
-This catalog is adapted from the upstream `nostr-mcp-server` functionality now hosted in Nostr Agent Interface.
+This catalog represents the canonical Nostr tool contract used by Nostr Agent Interface.
+
+Lineage note: this contract originates from the original Nostr MCP Server JARC toolset and is extended here for broader CLI/API workflows, with MCP preserved as a supported compatibility transport.
 
 ## Reading and Querying
 
-1. `getProfile`: Fetch Nostr profile metadata (kind 0) by pubkey.
-2. `getKind1Notes`: Fetch text notes (kind 1) by author.
-3. `getLongFormNotes`: Fetch long-form notes (kind 30023).
-4. `getReceivedZaps`: Fetch zaps received by a pubkey.
-5. `getSentZaps`: Fetch zaps sent by a pubkey.
-6. `getAllZaps`: Fetch sent and received zaps together.
-7. `queryEvents`: Generic event query by kinds/authors/ids/tags/time.
-8. `getContactList`: Read contact list (kind 3).
-9. `getFollowing`: Alias for following list retrieval.
-10. `getRelayList`: Read relay list metadata (kind 10002 / NIP-65).
+1. `getProfile`
+2. `getKind1Notes`
+3. `getLongFormNotes`
+4. `getReceivedZaps`
+5. `getSentZaps`
+6. `getAllZaps`
+7. `queryEvents`
+8. `getContactList`
+9. `getFollowing`
+10. `getRelayList`
 
 ## Identity and Profile
 
-11. `createKeypair`: Generate new Nostr keypairs.
-12. `createProfile`: Create a profile event.
-13. `updateProfile`: Update profile metadata.
+11. `createKeypair`
+12. `createProfile`
+13. `updateProfile`
 
 ## Notes
 
-14. `createNote`: Create unsigned kind 1 note.
-15. `signNote`: Sign note with private key.
-16. `publishNote`: Publish signed note to relays.
-17. `postNote`: One-step authenticated note post.
+14. `createNote`
+15. `signNote`
+16. `publishNote`
+17. `postNote`
 
 ## Generic Event Lifecycle
 
-18. `createNostrEvent`: Create unsigned event of arbitrary kind.
-19. `signNostrEvent`: Sign arbitrary unsigned event.
-20. `publishNostrEvent`: Publish arbitrary signed event.
+18. `createNostrEvent`
+19. `signNostrEvent`
+20. `publishNostrEvent`
 
 ## Social
 
-21. `setRelayList`: Publish relay list metadata (NIP-65).
-22. `follow`: Follow a pubkey via contact list update.
-23. `unfollow`: Unfollow a pubkey.
-24. `reactToEvent`: Publish reaction event (kind 7).
-25. `repostEvent`: Publish repost (kind 6).
-26. `deleteEvent`: Publish deletion request (kind 5).
-27. `replyToEvent`: Reply with proper NIP-10 thread tagging.
+21. `setRelayList`
+22. `follow`
+23. `unfollow`
+24. `reactToEvent`
+25. `repostEvent`
+26. `deleteEvent`
+27. `replyToEvent`
 
 ## Messaging
 
-28. `encryptNip04`: Encrypt plaintext with NIP-04.
-29. `decryptNip04`: Decrypt NIP-04 ciphertext.
-30. `sendDmNip04`: Send encrypted DM (kind 4).
-31. `getDmConversationNip04`: Fetch/decrypt NIP-04 conversation.
-32. `encryptNip44`: Encrypt plaintext with NIP-44.
-33. `decryptNip44`: Decrypt NIP-44 ciphertext.
-34. `sendDmNip44`: Send NIP-44 DM via NIP-17 gift wrap (kind 1059).
-35. `decryptDmNip44`: Decrypt NIP-17 gift wrapped DM.
-36. `getDmInboxNip44`: Fetch/decrypt NIP-44 inbox.
+28. `encryptNip04`
+29. `decryptNip04`
+30. `sendDmNip04`
+31. `getDmConversationNip04`
+32. `encryptNip44`
+33. `decryptNip44`
+34. `sendDmNip44`
+35. `decryptDmNip44`
+36. `getDmInboxNip44`
 
 ## Anonymous Actions
 
-37. `sendAnonymousZap`: Prepare anonymous zap and invoice flow.
-38. `postAnonymousNote`: Post a note with one-time generated identity.
+37. `sendAnonymousZap`
+38. `postAnonymousNote`
 
 ## NIP-19 Entity Utilities
 
-39. `convertNip19`: Convert among hex and NIP-19 entity encodings.
-40. `analyzeNip19`: Decode/analyze NIP-19 entity payload.
+39. `convertNip19`
+40. `analyzeNip19`
 
 ## Input Normalization Notes
 
 1. Public keys generally accept hex and `npub`.
-2. Private keys generally accept hex and `nsec` for auth/signing flows.
-3. Relay lists are optional for many tools; defaults are used when omitted.
+2. Private keys generally accept hex and `nsec`.
+3. Many tools accept optional relay lists and use defaults when omitted.
 
 ## Agent Usage Heuristics
 
-1. Prefer read-only tools first when gathering context.
-2. Before write operations, confirm required key material is present.
-3. For publishing failures, retry with explicit relay list and surfaced error details.
+1. Prefer reads before writes.
+2. Verify key material before mutations.
+3. Surface relay + event IDs in write summaries.
+4. Retry publish/query failures with explicit relay lists.

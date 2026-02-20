@@ -1,74 +1,79 @@
 # LLM Playbook
 
-This playbook describes how to run reliable LLM workflows on top of Nostr Agent Interface.
+This playbook describes reliable LLM workflows on top of Nostr Agent Interface.
 
 ## 1) Operating Model
 
-Treat Nostr Agent Interface as one tool surface with three equivalent transports:
+Treat Nostr Agent Interface as one tool contract with multiple transports:
 
-1. MCP: best for direct MCP-capable assistants.
-2. CLI: best for local scripts and shell agents.
-3. API: best for remote services and orchestrators.
+1. CLI: preferred for local shell-based agents.
+2. API: preferred for services/orchestrators.
+3. MCP: supported compatibility mode when runtime requires MCP.
 
-Use whichever transport is available in your runtime, but keep workflow logic tool-centric (tool name + JSON args).
+Workflow logic should stay tool-centric (`tool name + JSON args`) rather than transport-centric.
 
 ## 2) Prompting Strategy
 
-For an agent system prompt, include:
+For an agent system prompt include:
 
-1. Objective: what Nostr task should be completed.
-2. Constraints: required relays, private key policies, output format.
-3. Tool policy: read-first, then write only with explicit confirmation.
-4. Error policy: retry rules and fallback relay behavior.
+1. Objective.
+2. Constraints (relays, key policy, output format).
+3. Tool policy (read-first, explicit confirmation before writes).
+4. Error policy (retry + relay fallback).
 
-Suggested baseline policy:
+Baseline policy:
 
 1. Query before mutate.
-2. Never invent keys or signatures.
-3. Echo relay and event IDs in final output.
-4. On failures, include exact tool error and attempted args summary.
+2. Never invent keys/signatures.
+3. Return relay URLs and event IDs for writes.
+4. On failures, include exact tool error + sanitized arg summary.
 
 ## 3) Safety and Key Handling
 
-1. Avoid logging raw private keys in user-visible output.
-2. Prefer scoped key usage: pass key only to the tool call that needs it.
-3. If key format is ambiguous, normalize via NIP-19 utility tools first.
-4. For destructive actions (`deleteEvent`, unfollow), require explicit user intent.
+1. Never print raw private keys in user-visible output.
+2. Scope key usage to the single tool call that needs it.
+3. Normalize ambiguous key formats with NIP-19 tools first.
+4. Require explicit intent for destructive actions (`deleteEvent`, `unfollow`).
 
 ## 4) Standard Workflow Templates
 
-## Profile lookup
+### Profile lookup
 
 1. Call `getProfile`.
-2. If missing, optionally query notes with `getKind1Notes` to verify activity.
+2. Optionally call `getKind1Notes` if profile metadata is missing.
 
-## Authenticated posting
+### Authenticated posting
 
-1. If note needs preprocessing/tags, run `createNote` -> `signNote` -> `publishNote`.
-2. If simple post is enough, use `postNote`.
-3. Return publish status and event ID.
+1. Advanced path: `createNote` -> `signNote` -> `publishNote`.
+2. Simple path: `postNote`.
+3. Return publish status + event ID.
 
-## Social action with confirmation
+### Social action with confirmation
 
-1. Read current state (`getContactList`, `queryEvents`).
+1. Read context (`getContactList`, `queryEvents`).
 2. Confirm intended mutation.
-3. Execute (`follow`, `unfollow`, `reactToEvent`, `replyToEvent`, etc.).
-4. Return compact audit output (target, relays, resulting IDs).
+3. Execute mutation.
+4. Return compact audit output.
 
-## DM flow
+### DM flow
 
-1. Encrypt with `encryptNip04` or `encryptNip44` as required.
-2. Send with matching send tool.
-3. Validate retrieval/decryption using conversation or inbox read tools.
+1. Encrypt (`encryptNip04` or `encryptNip44`).
+2. Send (`sendDmNip04` or `sendDmNip44`).
+3. Verify via conversation/inbox reads.
 
 ## 5) API and CLI Equivalents
-
-`getProfile` example:
 
 CLI:
 
 ```bash
-nostr-agent-interface cli call getProfile '{"pubkey":"npub..."}'
+nostr-agent-interface cli getProfile --pubkey npub...
+nostr-agent-interface cli getProfile --help
+```
+
+CLI (JSON object style):
+
+```bash
+nostr-agent-interface cli getProfile '{"pubkey":"npub..."}' --json
 ```
 
 API:
@@ -80,22 +85,30 @@ curl -s http://127.0.0.1:3030/tools/getProfile \
   -d '{"pubkey":"npub..."}'
 ```
 
+API (key-protected):
+
+```bash
+curl -s http://127.0.0.1:3030/tools/getProfile \
+  -X POST \
+  -H 'content-type: application/json' \
+  -H 'authorization: Bearer <BEARER_TOKEN>' \
+  -d '{"pubkey":"npub..."}'
+```
+
 ## 6) Error Handling
 
-When a tool call fails:
+On failure:
 
-1. Check argument shape against `GET /tools` schema or MCP tool schema.
+1. Validate arg shape against `GET /tools`.
 2. Verify key format (`hex` vs `npub`/`nsec`).
-3. Retry once with explicit relays where supported.
-4. Report failure with:
-   - tool name
-   - sanitized args summary
-   - server error text
+3. Retry once with explicit relays if supported.
+4. If `error.code` is `rate_limited`, honor `retry-after` before retry.
+5. Report tool name + sanitized args + error payload.
 
-## 7) Suggested Next Docs
+## 7) Lineage Guidance
 
-As the project grows, extend this folder with:
+When describing this interface to users:
 
-1. `workflows/` per domain (profile, notes, social, DM, zaps).
-2. transport compatibility matrix and known edge cases.
-3. eval prompts and goldens for regression testing agent behavior.
+1. Note that it extends Nostr MCP Server and preserves its JARC tool contracts.
+2. Emphasize that MCP support remains available as compatibility mode.
+3. Recommend CLI/API for most operational agent loops.

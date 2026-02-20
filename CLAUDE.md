@@ -1,75 +1,103 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file gives implementation guidance for contributors working in this repository.
 
 ## Project Overview
 
-This is a **Model Context Protocol (MCP) server** that provides Nostr capabilities to LLMs. It implements 17 tools for interacting with the Nostr network including profile management, note creation/publishing, zap handling, and NIP-19 entity conversion.
+This repository is **Nostr Agent Interface**: an extension of the original Nostr MCP Server.
 
-Built with **snstr** (lightweight TypeScript Nostr library) and the **@modelcontextprotocol/sdk**.
+Core principles:
+
+1. Keep one canonical Nostr tool surface (JARC-style tool contracts).
+2. Expose that surface through MCP, CLI, and HTTP API.
+3. Prefer CLI/API for most operational agent workflows while retaining MCP compatibility.
+
+Current tool count: **40**.
+
+Built with:
+
+1. `snstr`
+2. `@modelcontextprotocol/sdk`
+3. `zod`
 
 ## Common Commands
 
 ```bash
-# Build the project (compiles TypeScript and sets executable permissions)
+# Build TypeScript + refresh tool manifest
 bun run build
 
-# Run all tests
+# Run tests
 bun test
 
-# Run a specific test file
-bun test __tests__/basic.test.ts
+# Run interface parity + CLI UX parity
+bun run test:parity
 
-# Start the MCP server
-bun start
+# Start MCP mode
+bun run start:mcp
 
-# Start with Node.js (runtime is dual-compatible)
-npm run start:node
+# Start CLI mode
+bun run start:cli
+
+# Start API mode
+bun run start:api
 ```
 
 ## Architecture
 
-### Entry Point
-- `index.ts` - Main MCP server setup and tool registration. All 17 tools are registered here with their handlers.
+### Entry Points
 
-### Module Structure
-Each feature area has its own directory with a `*-tools.ts` file containing:
-- Zod schemas for tool configuration
-- Core business logic functions
-- Formatting helpers
+1. `index.ts` - Shared tool registration and MCP host for the common tool surface.
+2. `app/index.ts` - Interface launcher (`mcp`, `cli`, `api`).
+3. `app/cli.ts` - CLI wrapper over shared tool contracts.
+4. `app/api.ts` - HTTP wrapper over shared tool contracts.
+5. `app/mcp-client.ts` - Wrapper/client bridge used by CLI/API to invoke the shared tool surface.
 
-| Directory | Purpose |
-|-----------|---------|
-| `profile/` | Keypair generation, profile creation/updates, authenticated note posting |
-| `note/` | Note creation, signing, publishing, anonymous posting, reading |
-| `zap/` | Zap receipt processing, anonymous zaps, LNURL handling |
-| `utils/` | Shared utilities (see below) |
+### Tool Modules
 
-### Utils Module (`utils/`)
-- `constants.ts` - `DEFAULT_RELAYS`, `QUERY_TIMEOUT`, `KINDS` enum
-- `conversion.ts` - NIP-19 encoding/decoding (`npubToHex`, `hexToNpub`)
-- `formatting.ts` - Output formatting helpers
-- `pool.ts` - `getFreshPool()` for Nostr relay connections
-- `nip19-tools.ts` - NIP-19 entity conversion and analysis
-- `ephemeral-relay.ts` - In-memory Nostr relay for testing
+Feature modules expose both:
 
-### Key Patterns
-- Each tool handler creates a fresh relay pool via `getFreshPool()` and closes it in a `finally` block
-- Public keys accept both hex and npub formats - use `npubToHex()` to normalize
-- Private keys accept both hex and nsec formats - use `normalizePrivateKey()` helper
-- Tool configs use Zod schemas defined in each module's `*ToolConfig` exports
+1. Business logic.
+2. Schema contracts reused across transports.
+
+Primary directories:
+
+1. `profile/`
+2. `note/`
+3. `event/`
+4. `social/`
+5. `relay/`
+6. `dm/`
+7. `zap/`
+8. `utils/`
+
+### Cross-Cutting Patterns
+
+1. Accept both hex and NIP-19 formats where applicable (`npub`, `nsec`, etc.).
+2. Normalize keys through shared helpers before signing or querying.
+3. Keep output semantics transport-consistent (MCP/CLI/API parity).
+4. Close relay resources in `finally` paths.
 
 ## Testing
 
-Tests use Bun's native test runner with an ephemeral in-memory relay (`utils/ephemeral-relay.ts`) - no external network needed.
+Tests run on Bun and include:
 
-- **Unit tests**: `basic.test.ts`, `profile-tools.test.ts`, `note-*.test.ts`, `zap-*.test.ts`, `nip19-*.test.ts`
-- **Integration tests**: `integration.test.ts` (relay interaction), `websocket-integration.test.ts` (WebSocket protocol)
+1. Unit tests per module.
+2. Integration tests with in-memory relay (`utils/ephemeral-relay.ts`).
+3. Parity tests across MCP/CLI/API.
 
-Note: Tests require Bun. The runtime is dual-compatible (Bun or Node.js).
+Primary docs:
 
-## Key Dependencies
-- `snstr` - Nostr protocol (keypairs, events, signing, NIP-19)
-- `@noble/curves` - secp256k1 cryptography
-- `light-bolt11-decoder` - Lightning invoice parsing
-- `zod` - Schema validation for tool inputs
+1. `docs/testing.md`
+2. `__tests__/README.md`
+
+## Artifact Contract
+
+Tool schema artifact:
+
+1. `artifacts/tools.json`
+
+Generation:
+
+```bash
+bun run generate:tools-manifest
+```
