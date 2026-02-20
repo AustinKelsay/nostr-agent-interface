@@ -1,8 +1,18 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { RelayPool } from "snstr";
-import { CompatibleRelayPool, getFreshPool } from "../utils/pool.js";
+import { CompatibleRelayPool, getFreshPool, type NostrEvent } from "../utils/pool.js";
 
 describe("utils/pool CompatibleRelayPool", () => {
+  const makeEvent = (id: string): NostrEvent => ({
+    id,
+    pubkey: "pubkey",
+    created_at: 1,
+    kind: 1,
+    tags: [],
+    content: "",
+    sig: "sig",
+  });
+
   const errorSpy = mock(() => {});
   const originalConsoleError = console.error;
   const originalRelayPoolClose = RelayPool.prototype.close;
@@ -27,9 +37,12 @@ describe("utils/pool CompatibleRelayPool", () => {
   });
 
   test("get returns first event when querySync has results", async () => {
-    const querySyncMock = mock(async () => [] as any[]);
-    const first = { id: "1" };
-    querySyncMock.mockImplementation(async () => [first, { id: "2" }]);
+    const querySyncMock = mock(
+      async (_relays: string[], _filter: unknown, _opts?: { timeout: number }) =>
+        [] as NostrEvent[],
+    );
+    const first = makeEvent("1");
+    querySyncMock.mockImplementation(async () => [first, makeEvent("2")]);
 
     const pool = new CompatibleRelayPool([]);
     (pool as any).querySync = querySyncMock;
@@ -41,7 +54,10 @@ describe("utils/pool CompatibleRelayPool", () => {
   });
 
   test("get returns null for empty results and on query errors", async () => {
-    const querySyncMock = mock(async () => [] as any[]);
+    const querySyncMock = mock(
+      async (_relays: string[], _filter: unknown, _opts?: { timeout: number }) =>
+        [] as NostrEvent[],
+    );
     const pool = new CompatibleRelayPool([]);
     (pool as any).querySync = querySyncMock;
     expect(await pool.get(["wss://relay.example"], { kinds: [1] })).toBeNull();
@@ -54,11 +70,14 @@ describe("utils/pool CompatibleRelayPool", () => {
   });
 
   test("getMany returns events and falls back to [] on errors", async () => {
-    const querySyncMock = mock(async () => [] as any[]);
-    querySyncMock.mockImplementation(async () => [{ id: "1" }]);
+    const querySyncMock = mock(
+      async (_relays: string[], _filter: unknown, _opts?: { timeout: number }) =>
+        [] as NostrEvent[],
+    );
+    querySyncMock.mockImplementation(async () => [makeEvent("1")]);
     const pool = new CompatibleRelayPool([]);
     (pool as any).querySync = querySyncMock;
-    expect(await pool.getMany(["wss://relay.example"], { kinds: [1] })).toEqual([{ id: "1" }]);
+    expect(await pool.getMany(["wss://relay.example"], { kinds: [1] })).toEqual([makeEvent("1")]);
 
     querySyncMock.mockImplementation(async () => {
       throw new Error("query failed");
