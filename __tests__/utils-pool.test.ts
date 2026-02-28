@@ -57,7 +57,7 @@ describe("utils/pool CompatibleRelayPool", () => {
 
     expect(pool).toBeTruthy();
 
-    const compatiblePoolLike = pool as Record<string, unknown>;
+    const compatiblePoolLike = pool as unknown as Record<string, unknown>;
 
     // In some Bun/VM executions, class identity can differ when modules are loaded
     // through different runtime paths, so validate runtime contract instead of strict
