@@ -4,7 +4,7 @@
 Implement a direct runtime architecture where CLI and API execute tools in-process by default, while MCP remains a separate, explicit interface.
 
 ## Current Baseline
-- `app/cli.ts` and `app/api.ts` now call a shared in-process runtime in `app/cli/tool-runtime.ts`.
+- `app/cli.ts` uses `app/cli/tool-runtime.ts`, while `app/api.ts` imports and uses `app/tool-runtime.ts` directly.
 - `app/index.ts` remains the MCP-mode entrypoint, with direct tool registration preserved for compatibility.
 - `cli` and `api` no longer depend on MCP transport for tool execution; they both execute the same shared handlers directly.
 - This removes the MCP stdio startup/IPC hop for normal CLI/API operation.

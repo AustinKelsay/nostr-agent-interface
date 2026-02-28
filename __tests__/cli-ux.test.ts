@@ -8,59 +8,18 @@ type ProcessResult = {
   stderr: string;
 };
 
-function runCliProcess(args: string[], stdinInput?: string): Promise<ProcessResult> {
-  const entrypoint = path.resolve(process.cwd(), "app/index.ts");
-
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [entrypoint, "cli", ...args], {
-      cwd: process.cwd(),
-      env: process.env,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk;
-    });
-
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk;
-    });
-
-    child.on("error", reject);
-
-    child.on("close", (code) => {
-      resolve({
-        code: code ?? 1,
-        stdout,
-        stderr,
-      });
-    });
-
-    if (typeof stdinInput === "string") {
-      child.stdin.write(stdinInput);
-    }
-
-    child.stdin.end();
-  });
-}
-
-function runCliProcessWithEnv(
+function runCliProcess(
   args: string[],
-  env: Record<string, string | undefined>,
+  env?: Record<string, string | undefined>,
   stdinInput?: string,
 ): Promise<ProcessResult> {
   const entrypoint = path.resolve(process.cwd(), "app/index.ts");
+  const nextEnv = env ? { ...process.env, ...env } : process.env;
 
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [entrypoint, "cli", ...args], {
       cwd: process.cwd(),
-      env: { ...process.env, ...env },
+      env: nextEnv,
       stdio: ["pipe", "pipe", "pipe"],
     });
 
@@ -120,7 +79,7 @@ describe("CLI UX", () => {
       targetType: "npub",
     });
 
-    const result = await runCliProcess(["call", "convertNip19", "--stdin", "--json"], input);
+    const result = await runCliProcess(["call", "convertNip19", "--stdin", "--json"], undefined, input);
 
     expect(result.code).toBe(0);
 
@@ -159,7 +118,7 @@ describe("CLI UX", () => {
   });
 
   test("supports NOSTR_JSON_ONLY for clean machine output", async () => {
-    const result = await runCliProcessWithEnv(["list-tools", "--json"], {
+    const result = await runCliProcess(["list-tools", "--json"], {
       NOSTR_JSON_ONLY: "true",
     });
 

@@ -33,7 +33,10 @@ export class CompatibleRelayPool extends RelayPool {
   }
 
   private getTimeoutMs(override?: number): number {
-    const candidate = Number.isInteger(override) ? override : this.defaultQueryTimeoutMs;
+    const candidate =
+      typeof override === "number" && Number.isFinite(override) && override > 0
+        ? override
+        : this.defaultQueryTimeoutMs;
     return typeof candidate === "number" && candidate > 0 ? candidate : this.defaultQueryTimeoutMs;
   }
 
