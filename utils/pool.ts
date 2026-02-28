@@ -1,4 +1,5 @@
 import { RelayPool } from "snstr";
+import type { PublishResponse } from "snstr";
 import { QUERY_TIMEOUT } from "./constants.js";
 
 /**
@@ -24,6 +25,14 @@ export class CompatibleRelayPool {
     options?: { timeout: number },
   ): Promise<NostrEvent[]> {
     return this.relayPool.querySync(relays, filter, options);
+  }
+
+  publish(
+    relays: string[],
+    event: NostrEvent,
+    options?: { timeout?: number; waitForAck?: boolean },
+  ): Promise<PublishResponse>[] {
+    return this.relayPool.publish(relays, event, options);
   }
 
   private withHardTimeout<T>(operation: () => Promise<T>, timeoutMs: number): Promise<T> {
