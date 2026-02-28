@@ -113,7 +113,7 @@ function normalizeToolInputSchema(inputSchema: unknown): unknown {
 
   if (isZodValue(inputSchema)) {
     try {
-      return zodToJsonSchema(inputSchema as never, { strictUnions: true });
+      return zodToJsonSchema(inputSchema as z.ZodTypeAny, { strictUnions: true });
     } catch {
       return inputSchema;
     }

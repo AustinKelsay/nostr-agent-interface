@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
 
 type ProfileToolsModule = typeof import('../profile/profile-tools.js');
 
@@ -14,7 +14,7 @@ async function loadProfileToolsWithMock(): Promise<{
 }> {
   const mockPool: MockPool = {
     close: mock(async () => {}),
-    publish: mock(() => [] as Promise<{ success: boolean }>[]),
+    publish: mock(() => [] as { success: boolean }[]),
   };
   const getFreshPoolMock = mock(() => mockPool);
 
@@ -47,10 +47,6 @@ describe('profile-tools publish error paths', () => {
       Promise.resolve({ success: true }),
       Promise.resolve({ success: true }),
     ]);
-  });
-
-  afterEach(() => {
-    mock.restore();
   });
 
   afterAll(() => {

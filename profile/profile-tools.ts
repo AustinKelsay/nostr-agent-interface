@@ -7,6 +7,10 @@ import type { PublishResponse } from "snstr";
 import { getFreshPool } from "../utils/index.js";
 import { schnorr } from '@noble/curves/secp256k1';
 
+function countPublishSuccesses(results: PromiseSettledResult<PublishResponse>[]): number {
+  return results.filter((r) => r.status === "fulfilled" && r.value?.success === true).length;
+}
+
 // Schema for createKeypair tool
 export const createKeypairToolConfig = {
   format: z.enum(["both", "hex", "npub"]).default("both").describe("Format to return keys in: hex only, npub only, or both"),
@@ -182,9 +186,7 @@ export async function createProfile(
       const results = await Promise.allSettled(pubPromises);
       
       // Check if at least one relay accepted the profile
-      const successCount = results.filter((r: PromiseSettledResult<PublishResponse>) => 
-        r.status === 'fulfilled' && r.value?.success === true
-      ).length;
+      const successCount = countPublishSuccesses(results);
       
       if (successCount === 0) {
         return {
@@ -298,9 +300,7 @@ export async function postNote(
       const results = await Promise.allSettled(pubPromises);
       
       // Check if at least one relay accepted the note
-      const successCount = results.filter((r: PromiseSettledResult<PublishResponse>) => 
-        r.status === 'fulfilled' && r.value?.success === true
-      ).length;
+      const successCount = countPublishSuccesses(results);
       
       if (successCount === 0) {
         return {

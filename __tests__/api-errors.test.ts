@@ -1,22 +1,91 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { test, expect, beforeAll, afterAll } from "bun:test";
 import { spawn, type ChildProcess } from "node:child_process";
+import { createServer } from "node:net";
 import path from "node:path";
 import { describeNetwork } from "./support/network-suite.js";
 
 const API_HOST = "127.0.0.1";
-const API_PORT = 41000 + Math.floor(Math.random() * 1000);
-const SECURED_API_PORT = API_PORT + 1000;
-const RATE_LIMITED_API_PORT = API_PORT + 2000;
-const RATE_LIMITED_ROTATING_KEY_API_PORT = API_PORT + 3000;
-const RATE_LIMITED_SPOOFED_PROXY_API_PORT = API_PORT + 4000;
-const BODY_LIMITED_API_PORT = API_PORT + 5000;
-const API_BASE_URL = `http://${API_HOST}:${API_PORT}`;
-const SECURED_API_BASE_URL = `http://${API_HOST}:${SECURED_API_PORT}`;
-const RATE_LIMITED_API_BASE_URL = `http://${API_HOST}:${RATE_LIMITED_API_PORT}`;
-const RATE_LIMITED_ROTATING_KEY_API_BASE_URL = `http://${API_HOST}:${RATE_LIMITED_ROTATING_KEY_API_PORT}`;
-const RATE_LIMITED_SPOOFED_PROXY_API_BASE_URL = `http://${API_HOST}:${RATE_LIMITED_SPOOFED_PROXY_API_PORT}`;
-const BODY_LIMITED_API_BASE_URL = `http://${API_HOST}:${BODY_LIMITED_API_PORT}`;
 const TEST_API_KEY = "test-api-key";
+const TEST_BASE_OFFSET = 1000;
+
+type ApiPortConfig = {
+  API_PORT: number;
+  SECURED_API_PORT: number;
+  RATE_LIMITED_API_PORT: number;
+  RATE_LIMITED_ROTATING_KEY_API_PORT: number;
+  RATE_LIMITED_SPOOFED_PROXY_API_PORT: number;
+  BODY_LIMITED_API_PORT: number;
+  API_BASE_URL: string;
+  SECURED_API_BASE_URL: string;
+  RATE_LIMITED_API_BASE_URL: string;
+  RATE_LIMITED_ROTATING_KEY_API_BASE_URL: string;
+  RATE_LIMITED_SPOOFED_PROXY_API_BASE_URL: string;
+  BODY_LIMITED_API_BASE_URL: string;
+};
+
+let cachedApiPorts: ApiPortConfig | null = null;
+
+function makeApiPortConfig(basePort: number): ApiPortConfig {
+  const SECURED_API_PORT = basePort + TEST_BASE_OFFSET;
+  const RATE_LIMITED_API_PORT = basePort + TEST_BASE_OFFSET * 2;
+  const RATE_LIMITED_ROTATING_KEY_API_PORT = basePort + TEST_BASE_OFFSET * 3;
+  const RATE_LIMITED_SPOOFED_PROXY_API_PORT = basePort + TEST_BASE_OFFSET * 4;
+  const BODY_LIMITED_API_PORT = basePort + TEST_BASE_OFFSET * 5;
+
+  return {
+    API_PORT: basePort,
+    SECURED_API_PORT,
+    RATE_LIMITED_API_PORT,
+    RATE_LIMITED_ROTATING_KEY_API_PORT,
+    RATE_LIMITED_SPOOFED_PROXY_API_PORT,
+    BODY_LIMITED_API_PORT,
+    API_BASE_URL: `http://${API_HOST}:${basePort}`,
+    SECURED_API_BASE_URL: `http://${API_HOST}:${SECURED_API_PORT}`,
+    RATE_LIMITED_API_BASE_URL: `http://${API_HOST}:${RATE_LIMITED_API_PORT}`,
+    RATE_LIMITED_ROTATING_KEY_API_BASE_URL: `http://${API_HOST}:${RATE_LIMITED_ROTATING_KEY_API_PORT}`,
+    RATE_LIMITED_SPOOFED_PROXY_API_BASE_URL: `http://${API_HOST}:${RATE_LIMITED_SPOOFED_PROXY_API_PORT}`,
+    BODY_LIMITED_API_BASE_URL: `http://${API_HOST}:${BODY_LIMITED_API_PORT}`,
+  };
+}
+
+function findAvailablePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, API_HOST, () => {
+      const address = server.address();
+      server.close(() => {
+        if (address && typeof address !== "string" && typeof address.port === "number") {
+          resolve(address.port);
+          return;
+        }
+        reject(new Error("Could not resolve ephemeral port"));
+      });
+    });
+  });
+}
+
+async function getApiPortConfig(): Promise<ApiPortConfig> {
+  if (!cachedApiPorts) {
+    cachedApiPorts = makeApiPortConfig(await findAvailablePort());
+  }
+  return cachedApiPorts;
+}
+
+const {
+  API_PORT,
+  SECURED_API_PORT,
+  RATE_LIMITED_API_PORT,
+  RATE_LIMITED_ROTATING_KEY_API_PORT,
+  RATE_LIMITED_SPOOFED_PROXY_API_PORT,
+  BODY_LIMITED_API_PORT,
+  API_BASE_URL,
+  SECURED_API_BASE_URL,
+  RATE_LIMITED_API_BASE_URL,
+  RATE_LIMITED_ROTATING_KEY_API_BASE_URL,
+  RATE_LIMITED_SPOOFED_PROXY_API_BASE_URL,
+  BODY_LIMITED_API_BASE_URL,
+} = await getApiPortConfig();
 
 type StartedApi = {
   process: ChildProcess;
