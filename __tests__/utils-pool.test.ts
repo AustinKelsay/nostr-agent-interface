@@ -36,6 +36,7 @@ describe("utils/pool CompatibleRelayPool", () => {
 
 
   beforeEach(() => {
+    mock.restore();
     relayPoolCloseMock.mockClear();
     relayPoolCloseMock.mockImplementation(async () => {});
     errorSpy.mockClear();
@@ -44,6 +45,7 @@ describe("utils/pool CompatibleRelayPool", () => {
   });
 
   afterEach(() => {
+    mock.restore();
     console.error = originalConsoleError;
     RelayPool.prototype.close = originalRelayPoolClose;
     globalThis.setTimeout = originalSetTimeout;
