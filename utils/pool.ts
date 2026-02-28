@@ -8,10 +8,16 @@ const COMPATIBLE_RELAY_POOL_BRAND = Symbol.for("nostr-agent-interface.Compatible
  * Extended RelayPool with compatibility methods for existing codebase
  */
 export class CompatibleRelayPool {
-  private readonly [COMPATIBLE_RELAY_POOL_BRAND] = true;
+  readonly [COMPATIBLE_RELAY_POOL_BRAND] = true;
+  readonly __compatibleRelayPool = true;
 
   static [Symbol.hasInstance](value: unknown): boolean {
-    return typeof value === "object" && value !== null && Boolean((value as { [COMPATIBLE_RELAY_POOL_BRAND]?: unknown })[COMPATIBLE_RELAY_POOL_BRAND]);
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      (Boolean((value as { [COMPATIBLE_RELAY_POOL_BRAND]?: unknown })[COMPATIBLE_RELAY_POOL_BRAND]) ||
+        (value as { __compatibleRelayPool?: unknown }).__compatibleRelayPool === true)
+    );
   }
 
   private readonly relayPool: RelayPool;
@@ -132,7 +138,11 @@ export class CompatibleRelayPool {
  * @returns A new CompatibleRelayPool instance
  */
 export function getFreshPool(relays: string[] = []): CompatibleRelayPool {
-  return new CompatibleRelayPool(relays);
+  const pool = new CompatibleRelayPool(relays);
+  if (Object.getPrototypeOf(pool) !== CompatibleRelayPool.prototype) {
+    Object.setPrototypeOf(pool, CompatibleRelayPool.prototype);
+  }
+  return pool;
 }
 
 /**
