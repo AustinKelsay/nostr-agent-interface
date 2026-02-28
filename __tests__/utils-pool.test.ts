@@ -63,7 +63,7 @@ describe("utils/pool CompatibleRelayPool", () => {
     return loadPoolModule().then(({ getFreshPool }) => {
       const pool = getFreshPool(["wss://relay.example"]);
       expect(pool).toBeDefined();
-      const shapedPool = pool as Record<string, unknown>;
+      const shapedPool = pool as unknown as Record<string, unknown>;
       expect(typeof shapedPool.get).toBe("function");
       expect(typeof shapedPool.getMany).toBe("function");
       expect(typeof shapedPool.close).toBe("function");
