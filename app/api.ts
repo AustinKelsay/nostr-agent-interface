@@ -728,15 +728,20 @@ export async function runApi(args: string[]): Promise<void> {
     }
   });
 
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(options.port, options.host, () => {
-      console.log(
-        `Nostr Agent API listening at http://${options.host}:${options.port} (in-process tools)`,
-      );
-      resolve();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(options.port, options.host, () => {
+        console.log(
+          `Nostr Agent API listening at http://${options.host}:${options.port} (in-process tools)`,
+        );
+        resolve();
+      });
     });
-  });
+  } catch (error) {
+    await toolRuntime.close();
+    throw error;
+  }
 
   const shutdown = async () => {
     await Promise.allSettled([

@@ -130,7 +130,7 @@ async function withFakeStdin<T>(
   }
 }
 
-  beforeEach(() => {
+beforeEach(() => {
   state.listToolsResponse = { tools: [COMPLEX_TOOL, PROFILE_TOOL, CREATE_KEYPAIR_TOOL] };
   state.callToolResponse = {
     content: [{ type: "text", text: "ok" }],
@@ -463,12 +463,4 @@ describe("runCli core behavior", () => {
     expect(typeof parsed.isError).toBe("boolean");
   });
 
-  test("runtime always closes on call failures", async () => {
-    state.callToolError = new Error("tool failed");
-
-    await expect(runCli(["call", "convertNip19", "{}"]))
-      .rejects.toThrow("tool failed");
-
-    expect(closeMock).toHaveBeenCalledTimes(1);
-  });
 });

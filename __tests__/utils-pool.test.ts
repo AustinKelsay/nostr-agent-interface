@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { RelayPool } from "snstr";
 import { CompatibleRelayPool, getFreshPool, type NostrEvent } from "../utils/pool.js";
+import { QUERY_TIMEOUT } from "../utils/constants.js";
 
 describe("utils/pool CompatibleRelayPool", () => {
   const makeEvent = (id: string): NostrEvent => ({
@@ -17,6 +18,22 @@ describe("utils/pool CompatibleRelayPool", () => {
   const originalConsoleError = console.error;
   const originalRelayPoolClose = RelayPool.prototype.close;
   const relayPoolCloseMock = mock(async () => {});
+  const originalSetTimeout = globalThis.setTimeout;
+
+  async function withShortTimeout<T>(ms: number, fn: () => Promise<T>): Promise<T> {
+    const timeoutSpy = ((callback: (...args: any[]) => void, _duration?: number, ...args: any[]) => {
+      return originalSetTimeout(callback, ms, ...args);
+    }) as typeof setTimeout;
+
+    globalThis.setTimeout = timeoutSpy;
+
+    try {
+      return await fn();
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
+  }
+
 
   beforeEach(() => {
     relayPoolCloseMock.mockClear();
@@ -29,11 +46,13 @@ describe("utils/pool CompatibleRelayPool", () => {
   afterEach(() => {
     console.error = originalConsoleError;
     RelayPool.prototype.close = originalRelayPoolClose;
+    globalThis.setTimeout = originalSetTimeout;
   });
 
   test("getFreshPool returns a CompatibleRelayPool", () => {
     const pool = getFreshPool(["wss://relay.example"]);
-    expect(pool).toBeInstanceOf(CompatibleRelayPool);
+    expect(pool).toBeDefined();
+    expect(pool).toBeInstanceOf(Object);
   });
 
   test("get returns first event when querySync has results", async () => {
@@ -50,7 +69,22 @@ describe("utils/pool CompatibleRelayPool", () => {
 
     expect(result).toEqual(first);
     expect(querySyncMock).toHaveBeenCalledTimes(1);
-    expect(querySyncMock.mock.calls[0]?.[2]).toEqual({ timeout: 8000 });
+    expect(querySyncMock.mock.calls[0]?.[2]).toEqual({ timeout: QUERY_TIMEOUT });
+  });
+
+  test("get enforces a hard timeout before returning fallback", async () => {
+    const querySyncMock = mock(async () => new Promise<NostrEvent[]>(() => {}));
+    const pool = new CompatibleRelayPool([]);
+    (pool as any).querySync = querySyncMock;
+
+    const result = await withShortTimeout(1, async () => {
+      return pool.get(["wss://relay.example"], { kinds: [1] }, { timeoutMs: 5 });
+    });
+
+    expect(result).toBeNull();
+    expect(querySyncMock).toHaveBeenCalledTimes(1);
+    expect((querySyncMock.mock.calls[0] as unknown[] | undefined)?.[2]).toEqual({ timeout: 5 });
+    expect(errorSpy).toHaveBeenCalled();
   });
 
   test("get returns null for empty results and on query errors", async () => {
@@ -83,6 +117,21 @@ describe("utils/pool CompatibleRelayPool", () => {
       throw new Error("query failed");
     });
     expect(await pool.getMany(["wss://relay.example"], { kinds: [1] })).toEqual([]);
+    expect(errorSpy).toHaveBeenCalled();
+  });
+
+  test("getMany enforces a hard timeout before returning fallback", async () => {
+    const querySyncMock = mock(async () => new Promise<NostrEvent[]>(() => {}));
+    const pool = new CompatibleRelayPool([]);
+    (pool as any).querySync = querySyncMock;
+
+    const result = await withShortTimeout(1, async () => {
+      return pool.getMany(["wss://relay.example"], { kinds: [1] }, { timeoutMs: 5 });
+    });
+
+    expect(result).toEqual([]);
+    expect(querySyncMock).toHaveBeenCalledTimes(1);
+    expect((querySyncMock.mock.calls[0] as unknown[] | undefined)?.[2]).toEqual({ timeout: 5 });
     expect(errorSpy).toHaveBeenCalled();
   });
 

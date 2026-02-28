@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
+import { type ZodTypeAny } from "zod";
 import {
   NostrEvent,
   NostrFilter,
@@ -119,7 +120,8 @@ import {
 export type NostrToolRegistration = {
   name: string;
   description?: string;
-  inputSchema: unknown;
+  inputSchema: ZodTypeAny | Record<string, unknown>;
+  schema?: unknown;
   handler: (params: Record<string, unknown>, extras: unknown) => unknown;
 };
 
@@ -330,18 +332,19 @@ export function createNostrMcpServer(onToolRegister?: (tool: NostrToolRegistrati
   const originalToolRegistration = (server as any).tool.bind(server);
   if (onToolRegister) {
     (server as unknown as { tool: (...args: unknown[]) => unknown }).tool = (...args: unknown[]) => {
-      const [name, description, inputSchema, handler] = args as [
-        string,
-        string | undefined,
-        unknown,
-        (params: Record<string, unknown>, extras: unknown) => unknown,
-      ];
+    const [name, description, inputSchema, handler] = args as [
+      string,
+      string | undefined,
+      NostrToolRegistration["inputSchema"],
+      (params: Record<string, unknown>, extras: unknown) => unknown,
+    ];
 
       if (typeof name === "string" && typeof handler === "function") {
         onToolRegister({
           name,
           description,
           inputSchema,
+          schema: inputSchema,
           handler,
         });
       }

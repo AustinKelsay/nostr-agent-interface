@@ -43,6 +43,10 @@ const JSON_SCHEMA_TYPES = new Set<JsonSchemaType>([
   "object",
 ]);
 
+function isJsonMode(args: string[]): boolean {
+  return process.env.NOSTR_JSON_ONLY === "true" || args.includes("--json");
+}
+
 function printHelp() {
   console.log(`Nostr Agent CLI
 
@@ -517,16 +521,22 @@ function printToolContent(result: unknown) {
 }
 
 export async function runCli(args: string[]): Promise<number> {
-  const [command, ...rest] = args;
-
-  if (!command || command === "help" || command === "--help") {
-    printHelp();
-    return 0;
-  }
-
+  const shouldSuppressConsoleError = isJsonMode(args);
+  const originalConsoleError = console.error;
   let runtime: Awaited<ReturnType<typeof createCliToolRuntime>> | undefined;
 
+  if (shouldSuppressConsoleError) {
+    console.error = () => {};
+  }
+
+  const [command, ...rest] = args;
+
   try {
+    if (!command || command === "help" || command === "--help") {
+      printHelp();
+      return 0;
+    }
+
     if (command === "list-tools") {
       const { flags, positionals } = parseFlags(rest, { allowStdin: false });
 
@@ -622,6 +632,10 @@ export async function runCli(args: string[]): Promise<number> {
   } finally {
     if (runtime) {
       await runtime.close();
+    }
+
+    if (shouldSuppressConsoleError) {
+      console.error = originalConsoleError;
     }
   }
 }

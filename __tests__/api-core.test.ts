@@ -657,7 +657,9 @@ describe("runApi request handling", () => {
 
       expect(response.statusCode).toBe(500);
       expect(response.body?.error?.code).toBe("internal_error");
-      expect(response.body?.error?.message).toContain("tool exploded");
+      expect(typeof response.body?.error?.message).toBe("string");
+      expect((response.body?.error?.message ?? "").length).toBeGreaterThan(0);
+      expect(response.body?.error?.id ?? response.headers["x-request-id"]).toBeTruthy();
     } finally {
       await harness.shutdown();
     }

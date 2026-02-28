@@ -3,6 +3,7 @@ import {
   DEFAULT_RELAYS
 } from "../utils/index.js";
 import { generateKeypair, createEvent, getEventHash, signEvent, decode as nip19decode, encodePublicKey, encodePrivateKey } from "snstr";
+import type { PublishResponse } from "snstr";
 import { getFreshPool } from "../utils/index.js";
 import { schnorr } from '@noble/curves/secp256k1';
 
@@ -181,7 +182,7 @@ export async function createProfile(
       const results = await Promise.allSettled(pubPromises);
       
       // Check if at least one relay accepted the profile
-      const successCount = results.filter(r => 
+      const successCount = results.filter((r: PromiseSettledResult<PublishResponse>) => 
         r.status === 'fulfilled' && r.value?.success === true
       ).length;
       
@@ -297,7 +298,7 @@ export async function postNote(
       const results = await Promise.allSettled(pubPromises);
       
       // Check if at least one relay accepted the note
-      const successCount = results.filter(r => 
+      const successCount = results.filter((r: PromiseSettledResult<PublishResponse>) => 
         r.status === 'fulfilled' && r.value?.success === true
       ).length;
       

@@ -58,6 +58,20 @@ describe("in-process tool runtime", () => {
     }
   });
 
+  test("returns validation errors for malformed tool arguments", async () => {
+    const runtime = await createInProcessToolRuntime();
+
+    try {
+      const malformed = await runtime.callTool("convertNip19", { input: 12345, targetType: "hex" });
+      expect(malformed.isError).toBe(true);
+      expect(Array.isArray(malformed.content)).toBe(true);
+      expect(extractTextPayload(malformed)).toContain("Invalid arguments");
+      expect(extractTextPayload(malformed).toLowerCase()).toContain("invalid");
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test("returns structured error for unknown tool names", async () => {
     const runtime = await createInProcessToolRuntime();
 

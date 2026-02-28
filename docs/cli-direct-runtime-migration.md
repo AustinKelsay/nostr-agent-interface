@@ -4,7 +4,7 @@
 Implement a direct runtime architecture where CLI and API execute tools in-process by default, while MCP remains a separate, explicit interface.
 
 ## Current Baseline
-- `app/cli.ts` and `app/api.ts` now call a shared in-process runtime in `app/cli/tool-runtime.ts`.
+- `app/cli.ts` uses `app/cli/tool-runtime.ts`, while `app/api.ts` imports and uses `app/tool-runtime.ts` directly.
 - `app/index.ts` remains the MCP-mode entrypoint, with direct tool registration preserved for compatibility.
 - `cli` and `api` no longer depend on MCP transport for tool execution; they both execute the same shared handlers directly.
 - This removes the MCP stdio startup/IPC hop for normal CLI/API operation.
@@ -12,10 +12,12 @@ Implement a direct runtime architecture where CLI and API execute tools in-proce
 ## Success Criteria
 - CLI semantics stay identical for:
   - `list-tools`, `--help`, direct-tool invocation, `call`, required arg validation, and `--json` behavior.
-- `--json` output for CLI is clean JSON on `stdout` in all successful/error cases, with parseable MCP-like payload.
+- `--json` output for CLI tool invocations is clean JSON on `stdout`, with parseable MCP-like payloads on success and tool-result failures.
+- `NOSTR_JSON_ONLY=true` suppresses CLI stderr logs for JSON-mode scripts.
 - MCP remains explicitly available as a standalone interface (`nostr-agent-interface mcp`) with its own process contract.
 - CLI/API keep shared tool behavior through the same in-process handler paths.
 - Observability and timeout/error ordering remain equivalent for representative deterministic paths.
+- `CompatibleRelayPool` enforces a hard timeout around `querySync` calls so operations cannot exceed configured timeout budgets indefinitely.
 
 ## Phase 1 — Introduce CLI tool-runtime abstraction
 - Add `app/cli/tool-runtime.ts`.
@@ -46,6 +48,7 @@ Implement a direct runtime architecture where CLI and API execute tools in-proce
 - Reconcile output formatting differences (`content` block formatting, isError handling).
 - Add focused parity checks for deterministic tools and failure scenarios.
 - Validate parity expectations in both direct CLI and in-process API harness.
+- Document timeout hardening and JSON-only output behavior.
 - Done.
 
 ## Current status
@@ -60,5 +63,5 @@ Implement a direct runtime architecture where CLI and API execute tools in-proce
 3. Expand direct vs MCP compatibility assertions where it materially reduces regression risk.
 
 ## Open Implementation Risks
-- Deterministic parity is now established for core paths, but timeout-heavy and timing-sensitive branches still need periodic review.
+- Deterministic parity is now established for core paths, and timeout-heavy branches are now explicitly bounded by hard timeout behavior in `CompatibleRelayPool`.
 - Script-facing behavior (especially `text` ordering in rare edge paths) must remain byte-stable where relied upon by integrations.

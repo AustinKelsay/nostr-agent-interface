@@ -32,4 +32,4 @@ Implementation notes
 Current status
 - CLI/API direct runtime parity is now the default implementation.
 - MCP parity remains covered via dedicated MCP dispatch tests and schema checks.
-- Timeout semantics for live relay paths are intentionally excluded from parity expectations due environment-dependent timing variance.
+- Timeout semantics for live relay paths are intentionally excluded from parity expectations due to environment-dependent timing variance.

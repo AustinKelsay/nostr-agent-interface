@@ -87,6 +87,10 @@ Required schema fields are validated before tool execution.
 
 1. default: prints text blocks from tool output.
 2. `--json`: prints raw tool result payload as JSON.
+3. `NOSTR_JSON_ONLY=true`: suppresses CLI stderr logging while keeping JSON output parseable.
+
+`NOSTR_JSON_ONLY` is useful for automation scripts that need strict machine-readable output. It also applies to
+`--json` commands, so startup/service logs and tool-call informational logs are not written to stderr.
 
 ## Usage Notes
 
