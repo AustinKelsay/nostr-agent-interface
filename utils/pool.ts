@@ -2,8 +2,6 @@ import { RelayPool } from "snstr";
 import type { PublishResponse } from "snstr";
 import { QUERY_TIMEOUT } from "./constants.js";
 
-export const COMPATIBLE_RELAY_POOL_BRAND = Symbol.for("nostr-agent-interface.compatible-relay-pool");
-
 /**
  * Extended RelayPool with compatibility methods for existing codebase
  */
@@ -11,10 +9,6 @@ export class CompatibleRelayPool {
   private readonly relayPool: RelayPool;
 
   private readonly defaultQueryTimeoutMs: number;
-
-  // Stable runtime brand that allows callers and tests to validate the expected
-  // compatibility wrapper independent of class identity in isolated module realms.
-  [COMPATIBLE_RELAY_POOL_BRAND] = true;
 
   constructor(relays: string[] = []) {
     this.relayPool = new RelayPool(relays);

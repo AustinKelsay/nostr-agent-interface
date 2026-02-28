@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { RelayPool } from "snstr";
 import { QUERY_TIMEOUT } from "../utils/constants.js";
 import { type NostrEvent, type NostrFilter } from "../utils/pool.js";
-import { COMPATIBLE_RELAY_POOL_BRAND, CompatibleRelayPool, getFreshPool } from "../utils/pool.js";
+import { CompatibleRelayPool, getFreshPool } from "../utils/pool.js";
 
 describe("utils/pool CompatibleRelayPool", () => {
   const makeEvent = (id: string): NostrEvent => ({
@@ -56,11 +56,6 @@ describe("utils/pool CompatibleRelayPool", () => {
     const pool = getFreshPool(["wss://relay.example"]);
 
     expect(pool).toBeTruthy();
-
-    const brand = (pool as unknown as { [key: symbol]: unknown })[COMPATIBLE_RELAY_POOL_BRAND];
-    if (brand !== undefined) {
-      expect(brand).toBe(true);
-    }
 
     const querySyncMock = mock(async () => []);
     const compatiblePoolLike = pool as unknown as {
