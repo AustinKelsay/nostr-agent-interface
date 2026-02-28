@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { RelayPool } from "snstr";
-import { CompatibleRelayPool, getFreshPool, type NostrEvent } from "../utils/pool.js";
 import { QUERY_TIMEOUT } from "../utils/constants.js";
+import { type NostrEvent } from "../utils/pool.js";
+
+type PoolRuntimeModule = typeof import("../utils/pool.js");
+
+async function loadPoolModule(): Promise<PoolRuntimeModule> {
+  return (await import("../utils/pool.ts")) as PoolRuntimeModule;
+}
 
 describe("utils/pool CompatibleRelayPool", () => {
   const makeEvent = (id: string): NostrEvent => ({
@@ -52,12 +58,14 @@ describe("utils/pool CompatibleRelayPool", () => {
   });
 
   test("getFreshPool returns a CompatibleRelayPool", () => {
-    const pool = getFreshPool(["wss://relay.example"]);
-    expect(pool).toBeDefined();
-    expect(pool).toBeInstanceOf(CompatibleRelayPool);
-    expect(typeof (pool as unknown as { get: unknown }).get).toBe("function");
-    expect(typeof (pool as unknown as { getMany: unknown }).getMany).toBe("function");
-    expect(typeof (pool as unknown as { close: unknown }).close).toBe("function");
+    return loadPoolModule().then(({ getFreshPool, CompatibleRelayPool }) => {
+      const pool = getFreshPool(["wss://relay.example"]);
+      expect(pool).toBeDefined();
+      expect(pool).toBeInstanceOf(CompatibleRelayPool);
+      expect(typeof (pool as unknown as { get: unknown }).get).toBe("function");
+      expect(typeof (pool as unknown as { getMany: unknown }).getMany).toBe("function");
+      expect(typeof (pool as unknown as { close: unknown }).close).toBe("function");
+    });
   });
 
   test("get returns first event when querySync has results", async () => {
@@ -65,20 +73,21 @@ describe("utils/pool CompatibleRelayPool", () => {
       async (_relays: string[], _filter: unknown, _opts?: { timeout: number }) =>
         [] as NostrEvent[],
     );
-    const first = makeEvent("1");
-    querySyncMock.mockImplementation(async () => [first, makeEvent("2")]);
+    querySyncMock.mockImplementation(async () => [makeEvent("1"), makeEvent("2")]);
 
+    const { CompatibleRelayPool } = await loadPoolModule();
     const pool = new CompatibleRelayPool([]);
     (pool as any).querySync = querySyncMock;
     const result = await pool.get(["wss://relay.example"], { kinds: [1] });
 
-    expect(result).toEqual(first);
+    expect(result).toEqual(makeEvent("1"));
     expect(querySyncMock).toHaveBeenCalledTimes(1);
     expect(querySyncMock.mock.calls[0]?.[2]).toEqual({ timeout: QUERY_TIMEOUT });
   });
 
   test("get enforces a hard timeout before returning fallback", async () => {
     const querySyncMock = mock(async () => new Promise<NostrEvent[]>(() => {}));
+    const { CompatibleRelayPool } = await loadPoolModule();
     const pool = new CompatibleRelayPool([]);
     (pool as any).querySync = querySyncMock;
 
@@ -97,6 +106,7 @@ describe("utils/pool CompatibleRelayPool", () => {
       async (_relays: string[], _filter: unknown, _opts?: { timeout: number }) =>
         [] as NostrEvent[],
     );
+    const { CompatibleRelayPool } = await loadPoolModule();
     const pool = new CompatibleRelayPool([]);
     (pool as any).querySync = querySyncMock;
     expect(await pool.get(["wss://relay.example"], { kinds: [1] })).toBeNull();
@@ -114,6 +124,7 @@ describe("utils/pool CompatibleRelayPool", () => {
         [] as NostrEvent[],
     );
     querySyncMock.mockImplementation(async () => [makeEvent("1")]);
+    const { CompatibleRelayPool } = await loadPoolModule();
     const pool = new CompatibleRelayPool([]);
     (pool as any).querySync = querySyncMock;
     expect(await pool.getMany(["wss://relay.example"], { kinds: [1] })).toEqual([makeEvent("1")]);
@@ -127,6 +138,7 @@ describe("utils/pool CompatibleRelayPool", () => {
 
   test("getMany enforces a hard timeout before returning fallback", async () => {
     const querySyncMock = mock(async () => new Promise<NostrEvent[]>(() => {}));
+    const { CompatibleRelayPool } = await loadPoolModule();
     const pool = new CompatibleRelayPool([]);
     (pool as any).querySync = querySyncMock;
 
@@ -141,6 +153,7 @@ describe("utils/pool CompatibleRelayPool", () => {
   });
 
   test("close swallows parent close errors", async () => {
+    const { CompatibleRelayPool } = await loadPoolModule();
     const pool = new CompatibleRelayPool([]);
     await pool.close();
     expect(relayPoolCloseMock).toHaveBeenCalledTimes(1);
