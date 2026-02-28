@@ -1,10 +1,18 @@
 import { RelayPool } from "snstr";
 import { QUERY_TIMEOUT } from "./constants.js";
 
+const COMPATIBLE_RELAY_POOL_BRAND = Symbol.for("nostr-agent-interface.CompatibleRelayPool");
+
 /**
  * Extended RelayPool with compatibility methods for existing codebase
  */
 export class CompatibleRelayPool extends RelayPool {
+  [COMPATIBLE_RELAY_POOL_BRAND] = true;
+
+  static [Symbol.hasInstance](value: unknown): boolean {
+    return typeof value === "object" && value !== null && Boolean((value as { [COMPATIBLE_RELAY_POOL_BRAND]?: unknown })[COMPATIBLE_RELAY_POOL_BRAND]);
+  }
+
   private readonly defaultQueryTimeoutMs: number;
 
   constructor(relays: string[] = []) {
