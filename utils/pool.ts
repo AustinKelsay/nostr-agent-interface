@@ -109,7 +109,11 @@ export class CompatibleRelayPool extends RelayPool {
  * @returns A new CompatibleRelayPool instance
  */
 export function getFreshPool(relays: string[] = []): CompatibleRelayPool {
-  return new CompatibleRelayPool(relays);
+  const pool = new CompatibleRelayPool(relays);
+  if (Object.getPrototypeOf(pool) !== CompatibleRelayPool.prototype) {
+    Object.setPrototypeOf(pool, CompatibleRelayPool.prototype);
+  }
+  return pool;
 }
 
 /**
