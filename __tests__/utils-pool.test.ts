@@ -56,7 +56,6 @@ describe("utils/pool CompatibleRelayPool", () => {
     expect(typeof pool.getMany).toBe("function");
     expect(typeof pool.close).toBe("function");
     expect(typeof pool.publish).toBe("function");
-    expect((pool as { __compatibleRelayPool?: unknown }).__compatibleRelayPool).toBe(true);
   });
 
   test("get returns first event when querySync has results", async () => {
