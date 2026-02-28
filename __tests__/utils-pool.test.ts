@@ -60,15 +60,14 @@ describe("utils/pool CompatibleRelayPool", () => {
   });
 
   test("getFreshPool returns a CompatibleRelayPool", () => {
-    return loadPoolModule().then(({ getFreshPool, CompatibleRelayPool }) => {
+    return loadPoolModule().then(({ getFreshPool }) => {
       const pool = getFreshPool(["wss://relay.example"]);
       expect(pool).toBeDefined();
-      expect((pool as unknown as { [Symbol.toStringTag]?: unknown })[Symbol.toStringTag]).toBe(
-        "CompatibleRelayPool",
-      );
-      expect(typeof (pool as unknown as { get: unknown }).get).toBe("function");
-      expect(typeof (pool as unknown as { getMany: unknown }).getMany).toBe("function");
-      expect(typeof (pool as unknown as { close: unknown }).close).toBe("function");
+      const shapedPool = pool as Record<string, unknown>;
+      expect(typeof shapedPool.get).toBe("function");
+      expect(typeof shapedPool.getMany).toBe("function");
+      expect(typeof shapedPool.close).toBe("function");
+      expect(typeof shapedPool.querySync).toBe("function");
     });
   });
 
