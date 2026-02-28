@@ -6,9 +6,7 @@ import { type NostrEvent } from "../utils/pool.js";
 type PoolRuntimeModule = typeof import("../utils/pool.js");
 
 async function loadPoolModule(): Promise<PoolRuntimeModule> {
-  const cacheBuster = `${Date.now()}-${Math.random()}`;
-  const moduleUrl = new URL(`../utils/pool.js?nocache=${encodeURIComponent(cacheBuster)}`, import.meta.url);
-  return (await import(moduleUrl.href)) as PoolRuntimeModule;
+  return (await import("../utils/pool.js")) as PoolRuntimeModule;
 }
 
 describe("utils/pool CompatibleRelayPool", () => {
@@ -63,11 +61,10 @@ describe("utils/pool CompatibleRelayPool", () => {
     return loadPoolModule().then(({ getFreshPool }) => {
       const pool = getFreshPool(["wss://relay.example"]);
       expect(pool).toBeDefined();
-      const shapedPool = pool as unknown as Record<string, unknown>;
-      expect(typeof shapedPool.get).toBe("function");
-      expect(typeof shapedPool.getMany).toBe("function");
-      expect(typeof shapedPool.close).toBe("function");
-      expect(typeof shapedPool.querySync).toBe("function");
+      expect(typeof pool.get).toBe("function");
+      expect(typeof pool.getMany).toBe("function");
+      expect(typeof pool.close).toBe("function");
+      expect(typeof pool.querySync).toBe("function");
     });
   });
 
