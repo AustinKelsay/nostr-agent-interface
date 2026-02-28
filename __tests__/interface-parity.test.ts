@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { createServer } from "node:net";
 import path from "node:path";
 import { createManagedMcpClient } from "../app/mcp-client.js";
 
@@ -34,67 +35,112 @@ async function resolveBuiltOrSourceEntry(): Promise<string> {
   return path.resolve(process.cwd(), "app/index.ts");
 }
 
+/**
+ * Finds an available port by binding a temporary server to port 0.
+ */
+function findAvailablePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address();
+      server.close(() => {
+        if (addr && typeof addr !== "string" && typeof addr.port === "number") {
+          resolve(addr.port);
+        } else {
+          reject(new Error("Could not resolve ephemeral port"));
+        }
+      });
+    });
+  });
+}
+
+/**
+ * Polls the health endpoint until the API is ready or timeout.
+ */
+async function waitForApiReady(baseUrl: string, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${baseUrl}/health`);
+      if (res.ok) return;
+    } catch {
+      // Not ready yet
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error(`API did not become ready within ${timeoutMs}ms`);
+}
+
+/**
+ * Starts the API harness by spawning the real API process and issuing real
+ * HTTP requests. Exercises the actual request handling layer in app/api.ts.
+ */
 async function startApiHarness() {
   mock.restore();
-  const toolRuntimeModule = (await import("../app/tool-runtime.js" + "?interface-parity-runtime")) as typeof import(
-    "../app/tool-runtime.js"
-  );
-  const { createInProcessToolRuntime } = toolRuntimeModule;
-  const toolRuntime = await createInProcessToolRuntime();
+  const port = await findAvailablePort();
+  const nodeCommand = await resolveNodeCommand();
+  const apiEntry = await resolveBuiltOrSourceEntry();
+
+  const apiProcess = Bun.spawn({
+    cmd: [nodeCommand, apiEntry, "api", "--port", String(port)],
+    cwd: process.cwd(),
+    stderr: "pipe",
+    stdout: "pipe",
+    env: {
+      ...process.env,
+      NOSTR_AGENT_API_PORT: String(port),
+      NOSTR_AGENT_API_AUDIT_LOG_ENABLED: "false",
+    },
+  });
+
+  const baseUrl = `http://127.0.0.1:${port}`;
+  await waitForApiReady(baseUrl);
 
   return {
     invoke: async (options: InvokeRequestOptions): Promise<InvokeResponse> => {
       const method = options.method ?? "GET";
-      const headers: Record<string, string> = {};
-      let rawBody = "";
-
-      if (options.path === "/tools" && method === "GET") {
-        const body = await toolRuntime.listTools();
-        rawBody = JSON.stringify(body);
-        return {
-          statusCode: 200,
-          headers,
-          body,
-          rawBody,
-        };
-      }
-
-      const toolMatch = options.path.match(/^\/tools\/([^/]+)$/);
-      if (toolMatch && method === "POST") {
-        const toolName = decodeURIComponent(toolMatch[1]);
-        const incomingBody = options.bodyChunks?.join("") ?? "";
-        let parsedBody: Record<string, unknown> = {};
-        if (incomingBody.trim()) {
-          try {
-            parsedBody = JSON.parse(incomingBody) as Record<string, unknown>;
-          } catch {
-            parsedBody = {};
-          }
+      const url = `${baseUrl}${options.path}`;
+      const requestHeaders: Record<string, string> = {};
+      if (options.headers) {
+        for (const [key, value] of Object.entries(options.headers)) {
+          requestHeaders[key] = Array.isArray(value) ? value[0] : String(value);
         }
+      }
+      const body = options.bodyChunks?.join("") ?? undefined;
 
-        const body = await toolRuntime.callTool(toolName, parsedBody);
-        rawBody = JSON.stringify(body);
-        return {
-          statusCode: 200,
-          headers,
-          body,
-          rawBody,
-        };
+      const res = await fetch(url, {
+        method,
+        headers: Object.keys(requestHeaders).length > 0 ? requestHeaders : undefined,
+        body: method === "POST" && body !== undefined ? body : undefined,
+      });
+
+      const rawBody = await res.text();
+      let parsedBody: unknown = null;
+      if (rawBody.trim()) {
+        try {
+          parsedBody = JSON.parse(rawBody);
+        } catch {
+          parsedBody = null;
+        }
       }
 
-      const body = { error: "not_found" };
-      rawBody = JSON.stringify(body);
+      const responseHeaders: Record<string, string> = {};
+      res.headers.forEach((value, key) => {
+        responseHeaders[key.toLowerCase()] = value;
+      });
 
       return {
-        statusCode: 404,
-        headers,
-        body,
+        statusCode: res.status,
+        headers: responseHeaders,
+        body: parsedBody,
         rawBody,
       };
     },
 
     shutdown: async () => {
-      await toolRuntime.close();
+      apiProcess.kill();
+      await apiProcess.exited;
     },
   };
 }

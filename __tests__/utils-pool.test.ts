@@ -6,7 +6,8 @@ import { type NostrEvent } from "../utils/pool.js";
 type PoolRuntimeModule = typeof import("../utils/pool.js");
 
 async function loadPoolModule(): Promise<PoolRuntimeModule> {
-  const moduleUrl = new URL("../utils/pool.js", import.meta.url);
+  const cacheBuster = `${Date.now()}-${Math.random()}`;
+  const moduleUrl = new URL(`../utils/pool.js?nocache=${encodeURIComponent(cacheBuster)}`, import.meta.url);
   return (await import(moduleUrl.href)) as PoolRuntimeModule;
 }
 

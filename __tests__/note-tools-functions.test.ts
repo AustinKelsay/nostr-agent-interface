@@ -1,41 +1,64 @@
-import { mock, describe, it, expect, beforeAll, beforeEach, afterAll } from 'bun:test';
+import { mock, describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'bun:test';
 import { generateKeypair } from 'snstr';
 import { NostrEvent } from '../utils/index.js';
 
-// Mock the pool to prevent real WebSocket connections
-const mockPool = {
-  close: mock(() => {}),
-  publish: mock(() => [
-    Promise.resolve({ success: true }),
-    Promise.resolve({ success: true })
-  ])
+type NoteToolsModule = typeof import('../note/note-tools.js');
+
+type MockPool = {
+  close: ReturnType<typeof mock>;
+  publish: ReturnType<typeof mock>;
 };
 
-// Mock the pool module directly
-mock.module('../utils/pool.js', () => ({
-  getFreshPool: mock(() => mockPool)
-}));
+async function loadNoteToolsWithMock(): Promise<{
+  tools: NoteToolsModule;
+  mockPool: MockPool;
+  getFreshPoolMock: ReturnType<typeof mock>;
+}> {
+  const mockPool: MockPool = {
+    close: mock(async () => {}),
+    publish: mock(() => [
+      Promise.resolve({ success: true }),
+      Promise.resolve({ success: true }),
+    ]),
+  };
 
-// Now import the functions that use the mocked module
-import {
-  formatProfile,
-  formatNote,
-  createNote,
-  signNote,
-  publishNote
-} from '../note/note-tools.js';
+  const getFreshPoolMock = mock(() => mockPool);
+
+  mock.restore();
+  mock.module('../utils/index.js', () => ({
+    DEFAULT_RELAYS: ['wss://mock.relay'],
+    getFreshPool: getFreshPoolMock,
+  }));
+
+  const importPath = `../note/note-tools.js?mock=${Date.now()}-${Math.random()}`;
+  const tools = (await import(importPath)) as NoteToolsModule;
+
+  return {
+    tools,
+    mockPool,
+    getFreshPoolMock,
+  };
+}
 
 describe('Note Tools Functions', () => {
   let testKeys: { publicKey: string; privateKey: string };
+  let tools!: NoteToolsModule;
+  let mockPool!: MockPool;
+  let getFreshPoolMock!: ReturnType<typeof mock>;
 
   beforeAll(async () => {
     testKeys = await generateKeypair();
   });
 
-  beforeEach(() => {
-    // Reset mock state between tests
+  beforeEach(async () => {
+    ({ tools, mockPool, getFreshPoolMock } = await loadNoteToolsWithMock());
     mockPool.close.mockClear();
     mockPool.publish.mockClear();
+    getFreshPoolMock.mockClear();
+  });
+
+  afterEach(() => {
+    mock.restore();
   });
 
   afterAll(() => {
@@ -58,12 +81,12 @@ describe('Note Tools Functions', () => {
           nip05: 'test@example.com',
           lud16: 'test@getalby.com',
           lud06: 'LNURL123',
-          website: 'https://example.com'
+          website: 'https://example.com',
         }),
-        sig: 'test-sig'
+        sig: 'test-sig',
       };
 
-      const formatted = formatProfile(profileEvent);
+      const formatted = tools.formatProfile(profileEvent);
 
       expect(formatted).toContain('Name: Test User');
       expect(formatted).toContain('Display Name: Tester');
@@ -83,15 +106,15 @@ describe('Note Tools Functions', () => {
         kind: 0,
         tags: [],
         content: JSON.stringify({
-          name: 'Minimal User'
+          name: 'Minimal User',
         }),
-        sig: 'test-sig'
+        sig: 'test-sig',
       };
 
-      const formatted = formatProfile(profileEvent);
+      const formatted = tools.formatProfile(profileEvent);
 
       expect(formatted).toContain('Name: Minimal User');
-      expect(formatted).toContain('Display Name: Minimal User'); // Falls back to name
+      expect(formatted).toContain('Display Name: Minimal User');
       expect(formatted).toContain('About: No about information');
       expect(formatted).toContain('NIP-05: Not set');
     });
@@ -104,17 +127,17 @@ describe('Note Tools Functions', () => {
         kind: 0,
         tags: [],
         content: 'invalid json',
-        sig: 'test-sig'
+        sig: 'test-sig',
       };
 
-      const formatted = formatProfile(profileEvent);
+      const formatted = tools.formatProfile(profileEvent);
 
       expect(formatted).toContain('Name: Unknown');
       expect(formatted).toContain('Display Name: Unknown');
     });
 
     it('should handle null profile', () => {
-      const formatted = formatProfile(null as any);
+      const formatted = tools.formatProfile(null as unknown as NostrEvent);
       expect(formatted).toBe('No profile found');
     });
   });
@@ -128,10 +151,10 @@ describe('Note Tools Functions', () => {
         kind: 1,
         tags: [],
         content: 'This is a test note #nostr',
-        sig: 'test-sig'
+        sig: 'test-sig',
       };
 
-      const formatted = formatNote(noteEvent);
+      const formatted = tools.formatNote(noteEvent);
 
       expect(formatted).toContain('ID: note123');
       expect(formatted).toContain('Content: This is a test note #nostr');
@@ -140,18 +163,14 @@ describe('Note Tools Functions', () => {
     });
 
     it('should handle null note', () => {
-      const formatted = formatNote(null as any);
+      const formatted = tools.formatNote(null as unknown as NostrEvent);
       expect(formatted).toBe('');
     });
   });
 
   describe('createNote', () => {
     it('should create a valid unsigned note', async () => {
-      const result = await createNote(
-        testKeys.privateKey,
-        'Hello Nostr!',
-        [['t', 'greeting']]
-      );
+      const result = await tools.createNote(testKeys.privateKey, 'Hello Nostr!', [['t', 'greeting']]);
 
       expect(result.success).toBe(true);
       expect(result.noteEvent).toBeDefined();
@@ -163,28 +182,20 @@ describe('Note Tools Functions', () => {
       expect(note.tags).toEqual([['t', 'greeting']]);
       expect(note.pubkey).toBe(testKeys.publicKey);
       expect(note.created_at).toBeDefined();
-
-      // Should not have id or sig yet
       expect(note.id).toBeUndefined();
       expect(note.sig).toBeUndefined();
     });
 
     it('should handle nsec format', async () => {
       const nsec = 'nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5';
-      const result = await createNote(
-        nsec,
-        'Note with nsec'
-      );
+      const result = await tools.createNote(nsec, 'Note with nsec');
 
       expect(result.success).toBe(true);
       expect(result.noteEvent).toBeDefined();
     });
 
     it('should handle invalid private key', async () => {
-      const result = await createNote(
-        'invalid_key',
-        'This should fail'
-      );
+      const result = await tools.createNote('invalid_key', 'This should fail');
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('Error creating note');
@@ -193,21 +204,10 @@ describe('Note Tools Functions', () => {
 
   describe('signNote', () => {
     it('should sign a note correctly', async () => {
-      // First create a note
-      const createResult = await createNote(
-        testKeys.privateKey,
-        'Note to sign',
-        [['t', 'test']]
-      );
-
+      const createResult = await tools.createNote(testKeys.privateKey, 'Note to sign', [['t', 'test']]);
       expect(createResult.success).toBe(true);
 
-      // Then sign it
-      const signResult = await signNote(
-        testKeys.privateKey,
-        createResult.noteEvent
-      );
-
+      const signResult = await tools.signNote(testKeys.privateKey, createResult.noteEvent);
       expect(signResult.success).toBe(true);
       expect(signResult.signedNote).toBeDefined();
 
@@ -220,18 +220,8 @@ describe('Note Tools Functions', () => {
 
     it('should reject mismatched keys', async () => {
       const otherKeys = await generateKeypair();
-
-      // Create note with one key
-      const createResult = await createNote(
-        testKeys.privateKey,
-        'Note with key 1'
-      );
-
-      // Try to sign with different key
-      const signResult = await signNote(
-        otherKeys.privateKey,
-        createResult.noteEvent
-      );
+      const createResult = await tools.createNote(testKeys.privateKey, 'Note with key 1');
+      const signResult = await tools.signNote(otherKeys.privateKey, createResult.noteEvent);
 
       expect(signResult.success).toBe(false);
       expect(signResult.message).toContain('does not match');
@@ -240,13 +230,9 @@ describe('Note Tools Functions', () => {
 
   describe('publishNote', () => {
     it('should handle no relays', async () => {
-      const createResult = await createNote(testKeys.privateKey, 'Test');
-      const signResult = await signNote(testKeys.privateKey, createResult.noteEvent);
-
-      const publishResult = await publishNote(
-        signResult.signedNote,
-        []
-      );
+      const createResult = await tools.createNote(testKeys.privateKey, 'Test');
+      const signResult = await tools.signNote(testKeys.privateKey, createResult.noteEvent);
+      const publishResult = await tools.publishNote(signResult.signedNote, []);
 
       expect(publishResult.success).toBe(true);
       expect(publishResult.message).toContain('no relays specified');

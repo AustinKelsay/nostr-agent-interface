@@ -541,13 +541,43 @@ function getClientIdentifier(
   return "ip:unknown";
 }
 
-export async function runApi(args: string[]): Promise<void> {
-  const options = parseApiOptions(args);
+export type ApiServerHandle = {
+  port: number;
+  host: string;
+  shutdown: () => Promise<void>;
+};
 
-  if (options.showHelp) {
-    printApiHelp();
-    return;
-  }
+export type StartApiServerOverrides = {
+  host?: string;
+  port?: number;
+  apiKey?: string;
+  rateLimitMax?: number;
+  rateLimitWindowMs?: number;
+  auditLogEnabled?: boolean;
+  auditLogIncludeBodies?: boolean;
+  trustProxy?: boolean;
+  maxBodyBytes?: number;
+};
+
+/**
+ * Starts the API HTTP server for programmatic use (e.g. tests).
+ * Uses port 0 by default to bind to a random available port.
+ * Does not register SIGINT/SIGTERM handlers.
+ */
+export async function startApiServer(
+  overrides: StartApiServerOverrides = {},
+): Promise<ApiServerHandle> {
+  const options: Omit<ApiOptions, "showHelp"> = {
+    host: overrides.host ?? "127.0.0.1",
+    port: overrides.port ?? 0,
+    apiKey: overrides.apiKey,
+    rateLimitMax: overrides.rateLimitMax ?? 120,
+    rateLimitWindowMs: overrides.rateLimitWindowMs ?? 60000,
+    auditLogEnabled: overrides.auditLogEnabled ?? false,
+    auditLogIncludeBodies: overrides.auditLogIncludeBodies ?? false,
+    trustProxy: overrides.trustProxy ?? false,
+    maxBodyBytes: overrides.maxBodyBytes ?? 1048576,
+  };
 
   const toolRuntime = await createInProcessToolRuntime();
   const rateLimiter = new FixedWindowRateLimiter(options.rateLimitWindowMs, options.rateLimitMax);
@@ -728,19 +758,28 @@ export async function runApi(args: string[]): Promise<void> {
     }
   });
 
-  try {
-    await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(options.port, options.host, () => {
-        console.log(
-          `Nostr Agent API listening at http://${options.host}:${options.port} (in-process tools)`,
-        );
-        resolve();
-      });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(options.port, options.host, () => {
+      resolve();
     });
-  } catch (error) {
-    await toolRuntime.close();
-    throw error;
+  });
+
+  let port: number;
+  let host: string;
+
+  if (typeof server.address === "function") {
+    const addr = server.address();
+    if (!addr || typeof addr === "string") {
+      await toolRuntime.close();
+      server.close();
+      throw new Error("Failed to resolve server address after listen");
+    }
+    port = addr.port;
+    host = typeof addr.address === "string" ? addr.address : options.host;
+  } else {
+    port = options.port;
+    host = options.host;
   }
 
   const shutdown = async () => {
@@ -752,11 +791,42 @@ export async function runApi(args: string[]): Promise<void> {
     ]);
   };
 
+  return {
+    port,
+    host,
+    shutdown,
+  };
+}
+
+export async function runApi(args: string[]): Promise<void> {
+  const options = parseApiOptions(args);
+
+  if (options.showHelp) {
+    printApiHelp();
+    return;
+  }
+
+  const handle = await startApiServer({
+    host: options.host,
+    port: options.port,
+    apiKey: options.apiKey,
+    rateLimitMax: options.rateLimitMax,
+    rateLimitWindowMs: options.rateLimitWindowMs,
+    auditLogEnabled: options.auditLogEnabled,
+    auditLogIncludeBodies: options.auditLogIncludeBodies,
+    trustProxy: options.trustProxy,
+    maxBodyBytes: options.maxBodyBytes,
+  });
+
+  console.log(
+    `Nostr Agent API listening at http://${handle.host}:${handle.port} (in-process tools)`,
+  );
+
   process.once("SIGINT", () => {
-    void shutdown().finally(() => process.exit(0));
+    void handle.shutdown().finally(() => process.exit(0));
   });
 
   process.once("SIGTERM", () => {
-    void shutdown().finally(() => process.exit(0));
+    void handle.shutdown().finally(() => process.exit(0));
   });
 }
