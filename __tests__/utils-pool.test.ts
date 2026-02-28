@@ -6,7 +6,8 @@ import { type NostrEvent } from "../utils/pool.js";
 type PoolRuntimeModule = typeof import("../utils/pool.js");
 
 async function loadPoolModule(): Promise<PoolRuntimeModule> {
-  return (await import("../utils/pool.js")) as PoolRuntimeModule;
+  const moduleUrl = new URL("../utils/pool.js", import.meta.url);
+  return (await import(moduleUrl.href)) as PoolRuntimeModule;
 }
 
 describe("utils/pool CompatibleRelayPool", () => {
