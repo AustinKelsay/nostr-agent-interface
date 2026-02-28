@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { createServer } from "node:net";
 import path from "node:path";
 import { createManagedMcpClient } from "../app/mcp-client.js";
@@ -125,16 +125,19 @@ async function startApiHarness() {
       });
 
       const rawBody = await res.text();
+      type ParseFailure = { __jsonParseError: string; __raw: string };
       let parsedBody: unknown = null;
+      let parseFailure: ParseFailure | null = null;
       if (rawBody.trim()) {
         try {
           parsedBody = JSON.parse(rawBody);
         } catch (error) {
-          parsedBody = {
+          parseFailure = {
             __jsonParseError: error instanceof Error ? error.message : String(error),
             __raw: rawBody,
           };
-          console.error("Failed to parse API JSON response:", parsedBody.__jsonParseError, parsedBody.__raw);
+          parsedBody = parseFailure;
+          console.error("Failed to parse API JSON response:", parseFailure.__jsonParseError, parseFailure.__raw);
         }
       }
 
