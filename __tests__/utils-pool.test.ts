@@ -6,7 +6,7 @@ import { type NostrEvent } from "../utils/pool.js";
 type PoolRuntimeModule = typeof import("../utils/pool.js");
 
 async function loadPoolModule(): Promise<PoolRuntimeModule> {
-  return (await import("../utils/pool.ts")) as PoolRuntimeModule;
+  return (await import("../utils/pool.js")) as PoolRuntimeModule;
 }
 
 describe("utils/pool CompatibleRelayPool", () => {
