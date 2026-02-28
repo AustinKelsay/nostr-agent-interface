@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { test, expect, beforeAll, afterAll } from "bun:test";
 import { schnorr } from "@noble/curves/secp256k1";
 import { NostrRelay } from "../utils/ephemeral-relay.js";
 import { KINDS, QUERY_TIMEOUT } from "../utils/constants.js";

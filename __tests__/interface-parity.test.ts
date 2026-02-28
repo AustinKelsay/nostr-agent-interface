@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, expect, mock, test } from "bun:test";
 import { createServer } from "node:net";
 import path from "node:path";
 import { createManagedMcpClient } from "../app/mcp-client.js";
@@ -129,8 +129,12 @@ async function startApiHarness() {
       if (rawBody.trim()) {
         try {
           parsedBody = JSON.parse(rawBody);
-        } catch {
-          parsedBody = null;
+        } catch (error) {
+          parsedBody = {
+            __jsonParseError: error instanceof Error ? error.message : String(error),
+            __raw: rawBody,
+          };
+          console.error("Failed to parse API JSON response:", parsedBody.__jsonParseError, parsedBody.__raw);
         }
       }
 
@@ -180,8 +184,30 @@ async function startMcpHarness(): Promise<McpHarness> {
       const body = await managed.client.listTools();
       return { statusCode: 200, body };
     },
-    callTool: (toolName: string, args: Record<string, unknown>) =>
-      managed.client.callTool({ name: toolName, arguments: args }).then((body) => ({ statusCode: 200, body })),
+    callTool: async (toolName: string, args: Record<string, unknown>) => {
+      try {
+        const body = await managed.client.callTool({ name: toolName, arguments: args });
+        return { statusCode: 200, body };
+      } catch (error) {
+        const errorBody = (() => {
+          if (error && typeof error === "object" && "body" in error) {
+            return (error as { body?: unknown }).body;
+          }
+          if (error instanceof Error) {
+            return error.message;
+          }
+          return String(error);
+        })();
+
+        return {
+          statusCode: 500,
+          body: {
+            isError: true,
+            content: [{ type: "text", text: String(errorBody) }],
+          },
+        };
+      }
+    },
     close: async () => managed.close(),
   };
 }

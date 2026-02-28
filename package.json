@@ -11,6 +11,7 @@
   "scripts": {
     "test": "bun test",
     "test:parity": "bun test __tests__/interface-parity.test.ts __tests__/cli-ux.test.ts",
+    "test:network": "NOSTR_NETWORK_TESTS=1 bun test",
     "build": "tsc && node build/scripts/generate-tools-manifest.js && node -e \"const fs=require('fs'); ['build/index.js','build/app/index.js'].forEach((file)=>{ if (fs.existsSync(file)) fs.chmodSync(file, '755'); });\"",
     "generate:tools-manifest": "node build/scripts/generate-tools-manifest.js",
     "check:docs": "node build/scripts/check-doc-links.js",

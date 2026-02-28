@@ -48,11 +48,10 @@ export class CompatibleRelayPool {
   }
 
   private getTimeoutMs(override?: number): number {
-    const candidate =
-      typeof override === "number" && Number.isFinite(override) && override > 0
-        ? override
-        : this.defaultQueryTimeoutMs;
-    return typeof candidate === "number" && candidate > 0 ? candidate : this.defaultQueryTimeoutMs;
+    if (typeof override === "number" && Number.isFinite(override) && override > 0) {
+      return override;
+    }
+    return this.defaultQueryTimeoutMs;
   }
 
   /**

@@ -1,4 +1,4 @@
-import { describe, it, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
+import { test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
 import { NostrRelay } from '../utils/ephemeral-relay.js';
 import { schnorr } from '@noble/curves/secp256k1';
 import { randomBytes } from 'node:crypto';

@@ -758,12 +758,35 @@ export async function startApiServer(
     }
   });
 
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(options.port, options.host, () => {
-      resolve();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const onListenError = (error: Error) => {
+        reject(error);
+      };
+
+      const onListen = () => {
+        server.off("error", onListenError);
+        server.off("listening", onListen);
+        resolve();
+      };
+
+      server.once("error", onListenError);
+      server.once("listening", onListen);
+      server.listen(options.port, options.host, () => {
+        onListen();
+      });
     });
-  });
+  } catch (error) {
+    await Promise.allSettled([
+      toolRuntime.close(),
+      new Promise<void>((resolve) => {
+        server.close(() => {
+          resolve();
+        });
+      }),
+    ]);
+    throw error;
+  }
 
   let port: number;
   let host: string;

@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { test, expect, beforeAll, afterAll } from "bun:test";
 import { NostrRelay } from "../utils/ephemeral-relay.js";
 import { describeNetwork } from "./support/network-suite.js";
 

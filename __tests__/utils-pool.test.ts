@@ -53,9 +53,7 @@ describe("utils/pool CompatibleRelayPool", () => {
   });
 
   test("getFreshPool returns a CompatibleRelayPool", () => {
-    const pool = getFreshPool(["wss://relay.example"]);
-    expect(pool).toBeDefined();
-    expect(typeof pool).toBe("object");
+    expect(getFreshPool(["wss://relay.example"])).toBeInstanceOf(CompatibleRelayPool);
   });
 
   test("get returns first event when querySync has results", async () => {
