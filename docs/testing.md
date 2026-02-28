@@ -1,8 +1,18 @@
 # Testing Guide
 
-This project uses Bun test suites with explicit parity checks across **MCP**, **CLI**, and **API** interfaces.
+This project uses Bun test suites with explicit parity checks across **CLI**, **API**, and **MCP** interfaces.
 
 Nostr Agent Interface is API/CLI-first in day-to-day usage, while MCP remains a supported compatibility transport. Tests enforce that all transports remain semantically aligned.
+
+CLI/API run through the shared in-process runtime, so parity checks focus on behavior equivalence and contract stability rather than transport mechanics.
+
+## Interface Coverage Snapshot
+
+- CLI and API tests validate the shared parser/runtime path, output formatting, and process lifecycle.
+- MCP tests validate protocol registration and dispatch mapping as a separate interface.
+- Deterministic parity tests guard the overlap where all interfaces should return equivalent results.
+
+`docs/cli-direct-runtime-migration.md` and `docs/cli-direct-runtime-phase-4-parity.md` describe the implemented architecture and parity expectations.
 
 ## Goals
 
@@ -25,13 +35,29 @@ bun test __tests__/zap-tools-tests.test.ts
 bun run build
 ```
 
+By default, network-heavy suites are skipped to keep local runs deterministic.
+
+Run with network/integration suites enabled:
+
+```bash
+NOSTR_NETWORK_TESTS=1 bun test
+```
+
 `bun run test:parity` currently targets `__tests__/interface-parity.test.ts` and `__tests__/cli-ux.test.ts`.
+
+Targeted command groups:
+
+- CLI runtime and UX: `bun test __tests__/cli-core.test.ts __tests__/cli-ux.test.ts`
+- API perimeter and core internals: `bun test __tests__/api-core.test.ts __tests__/api-errors.test.ts __tests__/api-audit-logging.test.ts`
+- MCP protocol contract: `bun test __tests__/mcp-dispatch.test.ts`
+- Deterministic parity surface: `bun test __tests__/interface-parity.test.ts`
+- Network suites (set `NOSTR_NETWORK_TESTS=1`): `bun test __tests__/integration.test.ts __tests__/websocket-integration.test.ts __tests__/relay-tools.test.ts __tests__/event-tools.test.ts __tests__/social-tools.test.ts __tests__/dm-tools.test.ts __tests__/nip42-auth.test.ts __tests__/ephemeral-relay.test.ts`
 
 ## Coverage Map
 
 | Suite | Scope | Why it exists |
 | --- | --- | --- |
-| `__tests__/interface-parity.test.ts` | MCP/CLI/API semantic parity for representative tools | Prevent transport drift in tool contract behavior |
+| `__tests__/interface-parity.test.ts` | CLI/API semantic parity for representative tools, with MCP catalog checks in dedicated tests | Prevent transport drift in tool contract behavior |
 | `__tests__/cli-core.test.ts` | In-process CLI parser and command dispatcher (`runCli`) | Catch regressions in flag parsing, schema-aware coercion, stdin/json modes, and required-field validation |
 | `__tests__/cli-ux.test.ts` | Spawned-process CLI UX behavior | Verify real process exit codes, stdout/stderr layout, and help/usage ergonomics |
 | `__tests__/api-core.test.ts` | API internals and request lifecycle in an in-memory server harness | Validate option parsing, redaction utilities, request routing, auth/rate-limit/body-cap handling, and shutdown behavior |
@@ -144,12 +170,12 @@ Coverage file:
 Checks:
 
 1. top-level/subcommand help dispatch and usage validation.
-2. robust `list-tools` handling, including malformed/partial MCP responses.
+2. robust `list-tools` handling, including malformed/partial runtime responses.
 3. `call` subcommand usage constraints and stdin/json argument-mode rules.
 4. direct tool command parsing with schema-aware typed coercion and enum checks.
 5. required-field enforcement for direct command execution.
 6. stdin behavior for TTY vs piped input.
-7. MCP client lifecycle guarantees (client close on both success and thrown errors).
+7. runtime lifecycle guarantees (`runCli` and tool runtime close on both success and errors).
 
 ## API Error Envelope Tests
 
@@ -261,6 +287,7 @@ Useful env vars:
 10. `NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES`
 11. `NOSTR_MCP_COMMAND`
 12. `NOSTR_MCP_ARGS`
+13. `NOSTR_NETWORK_TESTS`
 
 ## Troubleshooting
 
@@ -269,7 +296,7 @@ If parity fails:
 1. Rerun `bun run build`.
 2. Verify wrappers still map to canonical tool contracts.
 3. Diff `GET /tools` and MCP `list-tools` output.
-4. Inspect stderr for MCP child startup/runtime failures.
+4. If MCP mode tests fail, inspect MCP startup/runtime diagnostics.
 
 If CLI tests fail:
 
@@ -294,3 +321,11 @@ If zap processing tests fail:
 1. Re-run `bun test __tests__/zap-tools-tests.test.ts`.
 2. Verify zap tag parsing paths (`description`, `bolt11`, `p`, `e`, `a`, `lnurl`) and fallback order.
 3. Verify cache TTL/overflow behavior did not change unintentionally.
+
+## Network-Dependent Suites
+
+`NOSTR_NETWORK_TESTS=1` enables network-backed suites that can be flaky in constrained environments:
+
+1. `integration` and `websocket-integration`.
+2. `relay-tools`, `event-tools`, `social-tools`, `dm-tools`, `nip42-auth`, `ephemeral-relay`.
+3. API integration tests that bind ephemeral ports (`api-audit-logging`, `api-errors`).

@@ -1,6 +1,8 @@
 # CLI Guide
 
-Nostr Agent Interface exposes the full MCP tool contract directly in CLI mode.
+Nostr Agent Interface exposes the canonical tool contract directly in CLI mode.
+
+CLI executes tools through the in-process shared tool runtime by default; it does not route through MCP transport.
 
 ## Command Model
 
@@ -83,8 +85,8 @@ Required schema fields are validated before tool execution.
 
 ## Output Modes
 
-1. default: prints text blocks from MCP tool output.
-2. `--json`: prints raw MCP result payload.
+1. default: prints text blocks from tool output.
+2. `--json`: prints raw tool result payload as JSON.
 
 ## Usage Notes
 
@@ -97,7 +99,7 @@ Required schema fields are validated before tool execution.
 Primary suites:
 
 1. `__tests__/cli-core.test.ts` for in-process parser/dispatcher behavior (`runCli`).
-2. `__tests__/cli-ux.test.ts` for spawned-process UX behavior (stdout/stderr, help, exit codes).
+2. `__tests__/cli-ux.test.ts` for process-level UX behavior (stdout/stderr, help, exit codes).
 
 Targeted run:
 

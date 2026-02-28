@@ -116,6 +116,13 @@ import {
   getDmInboxNip44
 } from "./dm/dm-tools.js";
 
+export type NostrToolRegistration = {
+  name: string;
+  description?: string;
+  inputSchema: unknown;
+  handler: (params: Record<string, unknown>, extras: unknown) => unknown;
+};
+
 // Set WebSocket implementation for Node.js (Bun has native WebSocket)
 if (typeof globalThis.WebSocket === 'undefined') {
   (globalThis as any).WebSocket = WebSocket;
@@ -313,12 +320,35 @@ export function buildAllZapsResponseText(params: {
   return `${summary}\n${formattedZaps}`;
 }
 
-export function createNostrMcpServer(): McpServer {
+export function createNostrMcpServer(onToolRegister?: (tool: NostrToolRegistration) => void): McpServer {
   // Create server instance
   const server = new McpServer({
     name: "nostr",
     version: "1.0.0",
   });
+
+  const originalToolRegistration = (server as any).tool.bind(server);
+  if (onToolRegister) {
+    (server as unknown as { tool: (...args: unknown[]) => unknown }).tool = (...args: unknown[]) => {
+      const [name, description, inputSchema, handler] = args as [
+        string,
+        string | undefined,
+        unknown,
+        (params: Record<string, unknown>, extras: unknown) => unknown,
+      ];
+
+      if (typeof name === "string" && typeof handler === "function") {
+        onToolRegister({
+          name,
+          description,
+          inputSchema,
+          handler,
+        });
+      }
+
+      return originalToolRegistration(...args);
+    };
+  }
 
 // Register Nostr tools
 server.tool(

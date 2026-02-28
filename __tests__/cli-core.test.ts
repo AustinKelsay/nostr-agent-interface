@@ -25,6 +25,15 @@ const COMPLEX_TOOL: MockTool = {
   },
 };
 
+const CREATE_KEYPAIR_TOOL: MockTool = {
+  name: "createKeypair",
+  description: "Generate a new Nostr keypair",
+  inputSchema: {
+    type: "object",
+    properties: {},
+  },
+};
+
 const PROFILE_TOOL: MockTool = {
   name: "getProfile",
   description: "Fetch profile",
@@ -41,11 +50,10 @@ type MockState = {
   listToolsResponse: unknown;
   callToolResponse: unknown;
   callToolError?: Error;
-  createClientError?: Error;
 };
 
 const state: MockState = {
-  listToolsResponse: { tools: [COMPLEX_TOOL, PROFILE_TOOL] },
+  listToolsResponse: { tools: [COMPLEX_TOOL, PROFILE_TOOL, CREATE_KEYPAIR_TOOL] },
   callToolResponse: {
     content: [{ type: "text", text: "ok" }],
     isError: false,
@@ -53,7 +61,7 @@ const state: MockState = {
 };
 
 const listToolsMock = mock(async () => state.listToolsResponse);
-const callToolMock = mock(async (request: unknown) => {
+const callToolMock = mock(async (_toolName: string, _args: Record<string, unknown>) => {
   if (state.callToolError) {
     throw state.callToolError;
   }
@@ -61,22 +69,16 @@ const callToolMock = mock(async (request: unknown) => {
 });
 const closeMock = mock(async () => {});
 
-const createManagedMcpClientMock = mock(async () => {
-  if (state.createClientError) {
-    throw state.createClientError;
-  }
-
+const createCliToolRuntimeMock = mock(async () => {
   return {
-    client: {
-      listTools: listToolsMock,
-      callTool: callToolMock,
-    },
+    listTools: listToolsMock,
+    callTool: callToolMock,
     close: closeMock,
   };
 });
 
-mock.module("../app/mcp-client.js", () => ({
-  createManagedMcpClient: createManagedMcpClientMock,
+mock.module("../app/cli/tool-runtime.js", () => ({
+  createCliToolRuntime: createCliToolRuntimeMock,
 }));
 
 import { runCli } from "../app/cli.js";
@@ -128,16 +130,15 @@ async function withFakeStdin<T>(
   }
 }
 
-beforeEach(() => {
-  state.listToolsResponse = { tools: [COMPLEX_TOOL, PROFILE_TOOL] };
+  beforeEach(() => {
+  state.listToolsResponse = { tools: [COMPLEX_TOOL, PROFILE_TOOL, CREATE_KEYPAIR_TOOL] };
   state.callToolResponse = {
     content: [{ type: "text", text: "ok" }],
     isError: false,
   };
   state.callToolError = undefined;
-  state.createClientError = undefined;
 
-  createManagedMcpClientMock.mockClear();
+  createCliToolRuntimeMock.mockClear();
   listToolsMock.mockClear();
   callToolMock.mockClear();
   closeMock.mockClear();
@@ -145,7 +146,6 @@ beforeEach(() => {
 
 afterEach(() => {
   state.callToolError = undefined;
-  state.createClientError = undefined;
 });
 
 afterAll(() => {
@@ -158,7 +158,7 @@ describe("runCli core behavior", () => {
 
     expect(result).toBe(0);
     expect(output).toContain("Nostr Agent CLI");
-    expect(createManagedMcpClientMock).not.toHaveBeenCalled();
+    expect(createCliToolRuntimeMock).not.toHaveBeenCalled();
   });
 
   test("prints top-level help for explicit help aliases", async () => {
@@ -258,10 +258,7 @@ describe("runCli core behavior", () => {
     expect(rendered.result).toBe(0);
     expect(rendered.output).toContain('"isError": false');
 
-    expect(callToolMock).toHaveBeenCalledWith({
-      name: "convertNip19",
-      arguments: {},
-    });
+    expect(callToolMock).toHaveBeenCalledWith("convertNip19", {});
   });
 
   test("direct tool command handles unknown tool and help output", async () => {
@@ -301,9 +298,9 @@ describe("runCli core behavior", () => {
     ]);
 
     expect(callToolMock).toHaveBeenCalledTimes(1);
-    expect(callToolMock).toHaveBeenCalledWith({
-      name: "convertNip19",
-      arguments: {
+    expect(callToolMock).toHaveBeenCalledWith(
+      "convertNip19",
+      {
         input: "abc",
         targetType: "npub",
         relays: ["wss://relay.one"],
@@ -313,7 +310,7 @@ describe("runCli core behavior", () => {
         weight: 1.5,
         camelCaseField: "camel",
       },
-    });
+    );
   });
 
   test("direct tool command supports positional json args and --json flag", async () => {
@@ -321,10 +318,7 @@ describe("runCli core behavior", () => {
       runCli(["convertNip19", '{"input":"abc","targetType":"npub"}']),
     );
     expect(asPositional.result).toBe(0);
-    expect(callToolMock).toHaveBeenLastCalledWith({
-      name: "convertNip19",
-      arguments: { input: "abc", targetType: "npub" },
-    });
+    expect(callToolMock).toHaveBeenLastCalledWith("convertNip19", { input: "abc", targetType: "npub" });
 
     const asJson = await captureStdout(() =>
       runCli(["convertNip19", "--input", "abc", "--target-type", "npub", "--json"]),
@@ -390,22 +384,16 @@ describe("runCli core behavior", () => {
 
     await withFakeStdin("", false, async () => {
       await runCli(["call", "convertNip19", "--stdin"]);
-      expect(callToolMock).toHaveBeenLastCalledWith({
-        name: "convertNip19",
-        arguments: {},
-      });
+      expect(callToolMock).toHaveBeenLastCalledWith("convertNip19", {});
     });
 
     await withFakeStdin('{"input":"abc","targetType":"npub"}', false, async () => {
       await runCli(["convertNip19", "--stdin"]);
-      expect(callToolMock).toHaveBeenLastCalledWith({
-        name: "convertNip19",
-        arguments: { input: "abc", targetType: "npub" },
-      });
+      expect(callToolMock).toHaveBeenLastCalledWith("convertNip19", { input: "abc", targetType: "npub" });
     });
   });
 
-  test("always closes MCP client even when callTool throws", async () => {
+  test("always closes runtime on callTool failure", async () => {
     state.callToolError = new Error("tool failed");
 
     await expect(runCli(["call", "convertNip19", "{}"]))
@@ -437,22 +425,50 @@ describe("runCli core behavior", () => {
     };
 
     await runCli(["arrayTypedTool", "--alias", "ok", "--passthrough", "raw"]);
-    expect(callToolMock).toHaveBeenLastCalledWith({
-      name: "arrayTypedTool",
-      arguments: {
+    expect(callToolMock).toHaveBeenLastCalledWith(
+      "arrayTypedTool",
+      {
         alias: "ok",
         passthrough: "raw",
       },
-    });
+    );
 
     const help = await captureStdout(() => runCli(["badSchemaTool", "--help"]));
     expect(help.result).toBe(0);
     expect(help.output).toContain("Common options:");
 
     await runCli(["badSchemaTool"]);
-    expect(callToolMock).toHaveBeenLastCalledWith({
-      name: "badSchemaTool",
-      arguments: {},
-    });
+    expect(callToolMock).toHaveBeenLastCalledWith("badSchemaTool", {});
+  });
+
+  test("list-tools in --json is parseable", async () => {
+    const asJson = await captureStdout(() => runCli(["list-tools", "--json"]));
+    expect(asJson.result).toBe(0);
+
+    const parsed = JSON.parse(asJson.output);
+    expect(Array.isArray(parsed.tools)).toBe(true);
+    expect(parsed.tools.some((tool: { name?: unknown }) => tool.name === "convertNip19")).toBe(true);
+    expect(parsed.tools.every((tool: unknown) => typeof (tool as { name?: unknown }).name === "string"))
+      .toBe(true);
+  });
+
+  test("tool call in --json is parseable", async () => {
+    const asJson = await captureStdout(() =>
+      runCli(["createKeypair", "--json"]),
+    );
+    expect(asJson.result).toBe(0);
+
+    const parsed = JSON.parse(asJson.output);
+    expect(Array.isArray(parsed.content)).toBe(true);
+    expect(typeof parsed.isError).toBe("boolean");
+  });
+
+  test("runtime always closes on call failures", async () => {
+    state.callToolError = new Error("tool failed");
+
+    await expect(runCli(["call", "convertNip19", "{}"]))
+      .rejects.toThrow("tool failed");
+
+    expect(closeMock).toHaveBeenCalledTimes(1);
   });
 });

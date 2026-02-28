@@ -4,7 +4,6 @@ type MockState = {
   listToolsResponse: unknown;
   callToolResponse: unknown;
   callToolError?: Error;
-  createClientError?: Error;
 };
 
 const state: MockState = {
@@ -18,7 +17,7 @@ const state: MockState = {
 };
 
 const listToolsMock = mock(async () => state.listToolsResponse);
-const callToolMock = mock(async (_request: unknown) => {
+const callToolMock = mock(async (_toolName: string, _args: Record<string, unknown>) => {
   if (state.callToolError) {
     throw state.callToolError;
   }
@@ -26,16 +25,10 @@ const callToolMock = mock(async (_request: unknown) => {
 });
 const closeMock = mock(async () => {});
 
-const createManagedMcpClientMock = mock(async () => {
-  if (state.createClientError) {
-    throw state.createClientError;
-  }
-
+const createToolRuntimeMock = mock(async () => {
   return {
-    client: {
-      listTools: listToolsMock,
-      callTool: callToolMock,
-    },
+    listTools: listToolsMock,
+    callTool: callToolMock,
     close: closeMock,
   };
 });
@@ -94,8 +87,8 @@ mock.module("node:http", () => ({
   createServer: createServerMock,
 }));
 
-mock.module("../app/mcp-client.js", () => ({
-  createManagedMcpClient: createManagedMcpClientMock,
+mock.module("../app/tool-runtime.js", () => ({
+  createInProcessToolRuntime: createToolRuntimeMock,
 }));
 
 import { runApi, sanitizeForAuditLogs, sanitizeHeadersForAuditLogs } from "../app/api.js";
@@ -301,9 +294,8 @@ beforeEach(() => {
     isError: false,
   };
   state.callToolError = undefined;
-  state.createClientError = undefined;
 
-  createManagedMcpClientMock.mockClear();
+  createToolRuntimeMock.mockClear();
   listToolsMock.mockClear();
   callToolMock.mockClear();
   closeMock.mockClear();
@@ -317,7 +309,6 @@ afterEach(() => {
   (process as any).exit = originalProcessExit;
 
   state.callToolError = undefined;
-  state.createClientError = undefined;
 });
 
 afterAll(() => {
@@ -368,7 +359,7 @@ describe("API sanitization", () => {
 });
 
 describe("runApi options", () => {
-  test("supports --help without starting MCP client", async () => {
+  test("supports --help without starting tool runtime", async () => {
     const originalLog = console.log;
     const output: string[] = [];
 
@@ -383,7 +374,7 @@ describe("runApi options", () => {
     }
 
     expect(output.join("\n")).toContain("Config precedence");
-    expect(createManagedMcpClientMock).not.toHaveBeenCalled();
+    expect(createToolRuntimeMock).not.toHaveBeenCalled();
   });
 
   test("validates argument and env parsing", async () => {
@@ -429,7 +420,7 @@ describe("runApi request handling", () => {
 
       const v1Health = await harness.invoke({ path: "/v1/health" });
       expect(v1Health.statusCode).toBe(200);
-      expect(v1Health.body?.transport).toBe("mcp-stdio");
+      expect(v1Health.body?.transport).toBe("in-process");
 
       const tools = await harness.invoke({ path: "/tools" });
       const v1Tools = await harness.invoke({ path: "/v1/tools" });
@@ -465,18 +456,9 @@ describe("runApi request handling", () => {
         headers: { "content-type": "application/json" },
       });
 
-      expect(callToolMock).toHaveBeenNthCalledWith(1, {
-        name: "convertNip19",
-        arguments: { input: "abc", targetType: "npub" },
-      });
-      expect(callToolMock).toHaveBeenNthCalledWith(2, {
-        name: "convertNip19",
-        arguments: {},
-      });
-      expect(callToolMock).toHaveBeenNthCalledWith(3, {
-        name: "space tool",
-        arguments: {},
-      });
+      expect(callToolMock).toHaveBeenNthCalledWith(1, "convertNip19", { input: "abc", targetType: "npub" });
+      expect(callToolMock).toHaveBeenNthCalledWith(2, "convertNip19", {});
+      expect(callToolMock).toHaveBeenNthCalledWith(3, "space tool", {});
     } finally {
       await harness.shutdown();
     }
@@ -661,11 +643,11 @@ describe("runApi request handling", () => {
     }
   });
 
-  test("maps unexpected MCP exceptions to internal_error", async () => {
+  test("maps unexpected tool runtime exceptions to internal_error", async () => {
     const harness = await startApiHarness();
 
     try {
-      state.callToolError = new Error("mcp exploded");
+      state.callToolError = new Error("tool exploded");
       const response = await harness.invoke({
         method: "POST",
         path: "/tools/convertNip19",
@@ -675,7 +657,7 @@ describe("runApi request handling", () => {
 
       expect(response.statusCode).toBe(500);
       expect(response.body?.error?.code).toBe("internal_error");
-      expect(response.body?.error?.message).toContain("mcp exploded");
+      expect(response.body?.error?.message).toContain("tool exploded");
     } finally {
       await harness.shutdown();
     }

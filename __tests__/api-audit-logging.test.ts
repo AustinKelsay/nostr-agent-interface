@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
+import { describeNetwork } from "./support/network-suite.js";
 
 const API_HOST = "127.0.0.1";
 const API_PORT = 43000 + Math.floor(Math.random() * 1000);
@@ -146,7 +147,7 @@ async function waitForRequestLogs(
   throw new Error(`Audit log entries not found for requestId=${requestId}`);
 }
 
-describe("API audit logging", () => {
+describeNetwork("API audit logging", () => {
   let apiProcess: ChildProcess | undefined;
   let getStdout = () => "";
   let getStderr = () => "";

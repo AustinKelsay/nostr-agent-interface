@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { NostrRelay } from "../utils/ephemeral-relay.js";
 import { DEFAULT_RELAYS, KINDS, QUERY_TIMEOUT } from "../utils/constants.js";
+import { describeNetwork } from "./support/network-suite.js";
 
 import {
   createNostrEvent,
@@ -9,7 +10,7 @@ import {
   queryEvents,
 } from "../event/event-tools.js";
 
-describe("event-tools", () => {
+describeNetwork("event-tools", () => {
   let relay: NostrRelay;
   let relayUrl: string;
 

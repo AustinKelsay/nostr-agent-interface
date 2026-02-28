@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { schnorr } from "@noble/curves/secp256k1";
 import { encodeProfile } from "snstr";
+import { describeNetwork } from "./support/network-suite.js";
 import { createNote as createUnsignedNote, signNote as signLocalNote } from "../note/note-tools.js";
 import {
   createNostrEvent as createGenericEvent,
@@ -194,7 +195,7 @@ function buildZapDescription(params: {
   });
 }
 
-describe("index.ts MCP entrypoint coverage", () => {
+describeNetwork("index.ts MCP entrypoint coverage", () => {
   let relay: NostrRelay;
   let relayUrl = "";
 

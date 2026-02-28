@@ -4,7 +4,7 @@ import http, {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { createManagedMcpClient } from "./mcp-client.js";
+import { createInProcessToolRuntime } from "./tool-runtime.js";
 
 type ApiOptions = {
   host: string;
@@ -549,7 +549,7 @@ export async function runApi(args: string[]): Promise<void> {
     return;
   }
 
-  const managed = await createManagedMcpClient();
+  const toolRuntime = await createInProcessToolRuntime();
   const rateLimiter = new FixedWindowRateLimiter(options.rateLimitWindowMs, options.rateLimitMax);
 
   const server = http.createServer(async (req, res) => {
@@ -670,7 +670,7 @@ export async function runApi(args: string[]): Promise<void> {
       if (method === "GET" && canonicalPath === "/health") {
         sendJsonWithAudit(200, {
           status: "ok",
-          transport: "mcp-stdio",
+          transport: "in-process",
           authRequired: Boolean(options.apiKey),
           rateLimit: {
             enabled: options.rateLimitMax > 0,
@@ -682,7 +682,7 @@ export async function runApi(args: string[]): Promise<void> {
       }
 
       if (method === "GET" && canonicalPath === "/tools") {
-        const tools = await managed.client.listTools();
+        const tools = await toolRuntime.listTools();
         sendJsonWithAudit(200, tools);
         return;
       }
@@ -700,10 +700,7 @@ export async function runApi(args: string[]): Promise<void> {
 
         const argsPayload = await readJsonBody(req, options.maxBodyBytes);
         requestBodyForAudit = argsPayload;
-        const result = await managed.client.callTool({
-          name: toolName,
-          arguments: argsPayload,
-        });
+        const result = await toolRuntime.callTool(toolName, argsPayload);
 
         sendJsonWithAudit(200, result);
         return;
@@ -735,7 +732,7 @@ export async function runApi(args: string[]): Promise<void> {
     server.once("error", reject);
     server.listen(options.port, options.host, () => {
       console.log(
-        `Nostr Agent API listening at http://${options.host}:${options.port} (backed by MCP stdio)`,
+        `Nostr Agent API listening at http://${options.host}:${options.port} (in-process tools)`,
       );
       resolve();
     });
@@ -746,7 +743,7 @@ export async function runApi(args: string[]): Promise<void> {
       new Promise<void>((resolve) => {
         server.close(() => resolve());
       }),
-      managed.close(),
+      toolRuntime.close(),
     ]);
   };
 

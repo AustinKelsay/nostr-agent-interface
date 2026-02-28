@@ -2,6 +2,8 @@
 
 Nostr Agent Interface exposes the canonical tool contract over HTTP.
 
+The API executes tools through the shared in-process runtime, so tool behavior remains aligned with CLI while avoiding MCP transport overhead.
+
 For CLI usage of the same tool contract, see `docs/cli.md`.
 
 ## Start
@@ -23,7 +25,7 @@ nostr-agent-interface api --host 127.0.0.1 --port 3030
 
 ## Response Shape
 
-Successful tool calls (`POST /tools/:toolName`) return the underlying MCP `callTool` payload as JSON.
+Successful tool calls (`POST /tools/:toolName`) return the canonical tool runtime result payload as JSON.
 
 Error responses use a standardized envelope:
 

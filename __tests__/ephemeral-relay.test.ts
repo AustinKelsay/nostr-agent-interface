@@ -5,6 +5,7 @@ import { sha256 } from "@noble/hashes/sha256";
 import { WebSocket } from "ws";
 import { KINDS } from "../utils/constants.js";
 import { NostrRelay } from "../utils/ephemeral-relay.js";
+import { describeNetwork } from "./support/network-suite.js";
 
 type SignedEvent = {
   id: string;
@@ -173,7 +174,7 @@ async function collectUntilEose(ws: WebSocket, subId: string, timeoutMs = 2000):
   });
 }
 
-describe("ephemeral-relay coverage", () => {
+describeNetwork("ephemeral-relay coverage", () => {
   const relaysToClose: NostrRelay[] = [];
   const serversToClose: Array<{ close: (callback: () => void) => void }> = [];
 
