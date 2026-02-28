@@ -51,6 +51,7 @@ Targeted command groups:
 - API perimeter and core internals: `bun test __tests__/api-core.test.ts __tests__/api-errors.test.ts __tests__/api-audit-logging.test.ts`
 - MCP protocol contract: `bun test __tests__/mcp-dispatch.test.ts`
 - Deterministic parity surface: `bun test __tests__/interface-parity.test.ts`
+- Relay timeout behavior: `bun test __tests__/utils-pool.test.ts`
 - Network suites (set `NOSTR_NETWORK_TESTS=1`): `bun test __tests__/integration.test.ts __tests__/websocket-integration.test.ts __tests__/relay-tools.test.ts __tests__/event-tools.test.ts __tests__/social-tools.test.ts __tests__/dm-tools.test.ts __tests__/nip42-auth.test.ts __tests__/ephemeral-relay.test.ts`
 
 ## Coverage Map
@@ -60,6 +61,7 @@ Targeted command groups:
 | `__tests__/interface-parity.test.ts` | CLI/API semantic parity for representative tools, with MCP catalog checks in dedicated tests | Prevent transport drift in tool contract behavior |
 | `__tests__/cli-core.test.ts` | In-process CLI parser and command dispatcher (`runCli`) | Catch regressions in flag parsing, schema-aware coercion, stdin/json modes, and required-field validation |
 | `__tests__/cli-ux.test.ts` | Spawned-process CLI UX behavior | Verify real process exit codes, stdout/stderr layout, and help/usage ergonomics |
+| `__tests__/utils-pool.test.ts` | Relay compatibility timeout behavior | Ensure query hard-timeout fallback and deterministic timeout-aware signatures for `CompatibleRelayPool` |
 | `__tests__/api-core.test.ts` | API internals and request lifecycle in an in-memory server harness | Validate option parsing, redaction utilities, request routing, auth/rate-limit/body-cap handling, and shutdown behavior |
 | `__tests__/api-errors.test.ts` | API edge/error envelopes + perimeter controls | Lock error envelopes, auth behavior, rate limits, body caps, and route compatibility |
 | `__tests__/api-audit-logging.test.ts` | Structured API audit logging | Ensure request/response log events, redaction, and `requestId` correlation stay stable |
@@ -84,6 +86,14 @@ Primary coverage:
 
 1. `__tests__/cli-core.test.ts` (unit-level parser/dispatcher behavior).
 2. `__tests__/cli-ux.test.ts` (process-level behavior and exit codes).
+
+### Relay pool timeout hardening
+
+Recent changes enforce a hard timeout around `CompatibleRelayPool` query calls so stale `querySync` promises cannot stall command execution.
+
+Primary coverage:
+
+1. `__tests__/utils-pool.test.ts`.
 
 ### API perimeter hardening
 

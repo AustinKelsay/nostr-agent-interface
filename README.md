@@ -198,6 +198,7 @@ Primary env vars:
 11. `NOSTR_MCP_COMMAND`
 12. `NOSTR_MCP_ARGS`
 13. `NOSTR_NETWORK_TESTS` (`1` to run network/integration suites that require ephemeral relays or port binding)
+14. `NOSTR_JSON_ONLY` (`true` to suppress all CLI stderr logs and keep `--json` output machine-clean)
 
 ## MCP Client Setup (Optional)
 
