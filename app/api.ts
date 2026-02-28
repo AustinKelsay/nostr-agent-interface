@@ -760,13 +760,25 @@ export async function startApiServer(
 
   try {
     await new Promise<void>((resolve, reject) => {
-      const onListenError = (error: Error) => {
-        reject(error);
+      type ServerListener = (...args: unknown[]) => void;
+
+      const removeListener = (event: "error" | "listening", listener: ServerListener) => {
+        if (typeof (server as { off?: (event: string, listener: ServerListener) => unknown }).off === "function") {
+          (server as { off: (event: string, listener: ServerListener) => unknown }).off(event, listener);
+          return;
+        }
+        if (typeof server.removeListener === "function") {
+          server.removeListener(event, listener);
+        }
+      };
+
+      const onListenError: ServerListener = (error: unknown) => {
+        reject(error instanceof Error ? error : new Error(String(error)));
       };
 
       const onListen = () => {
-        server.off("error", onListenError);
-        server.off("listening", onListen);
+        removeListener("error", onListenError);
+        removeListener("listening", onListen);
         resolve();
       };
 
