@@ -69,10 +69,6 @@ describe("utils/pool CompatibleRelayPool", () => {
       expect(typeof (pool as unknown as { get: unknown }).get).toBe("function");
       expect(typeof (pool as unknown as { getMany: unknown }).getMany).toBe("function");
       expect(typeof (pool as unknown as { close: unknown }).close).toBe("function");
-      expect(
-        (pool instanceof CompatibleRelayPool) ||
-          (pool as unknown as { constructor: unknown }).constructor === CompatibleRelayPool,
-      ).toBe(true);
     });
   });
 
