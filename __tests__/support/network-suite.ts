@@ -1,3 +1,5 @@
+import { describe, test } from "bun:test";
+
 const runNetworkTests = process.env.NOSTR_NETWORK_TESTS === "1";
 
 const describeNetwork = runNetworkTests ? describe : describe.skip;

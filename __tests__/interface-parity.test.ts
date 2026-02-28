@@ -32,6 +32,7 @@ const signalHandlers = {
   SIGTERM: undefined as (() => void) | undefined,
 };
 const originalProcessOnce = process.once;
+type ProcessOnce = NodeJS.Process["once"];
 
 function createServerMock(handler: RequestHandler) {
   latestRequestHandler = handler;
@@ -64,14 +65,14 @@ mock.module("node:http", () => ({
 }));
 
 function interceptSignals() {
-  process.once = (event: string, listener: () => void) => {
+  process.once = ((event: string, listener: (...args: unknown[]) => void) => {
     if (event === "SIGINT" || event === "SIGTERM") {
       signalHandlers[event] = listener;
       return process as never;
     }
 
     return originalProcessOnce.call(process, event, listener as never) as never;
-  };
+  }) as ProcessOnce;
 }
 
 function restoreSignals() {
