@@ -12,11 +12,6 @@ const DEBUG   = process.env['DEBUG']   === 'true'
 const VERBOSE = process.env['VERBOSE'] === 'true' || DEBUG
 let portSeedCounter = 0
 
-// Only log output mode in non-test environments
-if (process.env.NODE_ENV !== 'test') {
-  console.error('output mode:', DEBUG ? 'debug' : VERBOSE ? 'verbose' : 'silent')
-}
-
 /* ================ [ Interfaces ] ================ */
 
 interface EventFilter {

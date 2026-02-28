@@ -8,13 +8,26 @@ type ProcessResult = {
   stderr: string;
 };
 
-function runCliProcess(args: string[], stdinInput?: string): Promise<ProcessResult> {
+function assertCleanListToolsOutput(result: ProcessResult) {
+  expect(result.code).toBe(0);
+  expect(result.stderr).toBe("");
+
+  const parsed = JSON.parse(result.stdout.trim());
+  expect(Array.isArray(parsed.tools)).toBe(true);
+}
+
+function runCliProcess(
+  args: string[],
+  env?: Record<string, string | undefined>,
+  stdinInput?: string,
+): Promise<ProcessResult> {
   const entrypoint = path.resolve(process.cwd(), "app/index.ts");
+  const nextEnv = env ? { ...process.env, ...env } : process.env;
 
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [entrypoint, "cli", ...args], {
       cwd: process.cwd(),
-      env: process.env,
+      env: nextEnv,
       stdio: ["pipe", "pipe", "pipe"],
     });
 
@@ -74,7 +87,7 @@ describe("CLI UX", () => {
       targetType: "npub",
     });
 
-    const result = await runCliProcess(["call", "convertNip19", "--stdin", "--json"], input);
+    const result = await runCliProcess(["call", "convertNip19", "--stdin", "--json"], undefined, input);
 
     expect(result.code).toBe(0);
 
@@ -102,6 +115,18 @@ describe("CLI UX", () => {
 
     expect(typeof firstText).toBe("string");
     expect(firstText).toContain("Conversion successful!");
+  });
+
+  test("emits clean list-tools --json output with no stderr", async () => {
+    const result = await runCliProcess(["list-tools", "--json"]);
+    assertCleanListToolsOutput(result);
+  });
+
+  test("supports NOSTR_JSON_ONLY for clean machine output", async () => {
+    const result = await runCliProcess(["list-tools", "--json"], {
+      NOSTR_JSON_ONLY: "true",
+    });
+    assertCleanListToolsOutput(result);
   });
 
   test("supports direct tool help", async () => {

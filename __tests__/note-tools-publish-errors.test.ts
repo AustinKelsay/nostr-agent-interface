@@ -1,45 +1,69 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 
-const mockPool = {
-  close: mock(async () => {}),
-  publish: mock(() => [] as Promise<{ success: boolean }>[]),
+type NoteToolsModule = typeof import('../note/note-tools.js');
+
+type MockPool = {
+  close: ReturnType<typeof mock>;
+  publish: ReturnType<typeof mock>;
 };
 
-const getFreshPoolMock = mock(() => mockPool);
+async function loadNoteToolsWithMock(): Promise<{
+  tools: NoteToolsModule;
+  mockPool: MockPool;
+  getFreshPoolMock: ReturnType<typeof mock>;
+}> {
+  const mockPool: MockPool = {
+    close: mock(async () => {}),
+    publish: mock(() => [] as Promise<{ success: boolean }>[]),
+  };
+  const getFreshPoolMock = mock(() => mockPool);
 
-mock.module('../utils/index.js', () => ({
-  DEFAULT_RELAYS: ['wss://mock.relay'],
-  getFreshPool: getFreshPoolMock,
-}));
+  mock.restore();
+  mock.module('../utils/index.js', () => ({
+    DEFAULT_RELAYS: ['wss://mock.relay'],
+    getFreshPool: getFreshPoolMock,
+  }));
 
-import { postAnonymousNote, publishNote } from '../note/note-tools.js';
+  const importPath = `../note/note-tools.js?mock=${Date.now()}-${Math.random()}`;
+  const tools = (await import(importPath)) as NoteToolsModule;
 
-const signedNote = {
-  id: 'a'.repeat(64),
-  pubkey: 'b'.repeat(64),
-  created_at: 1_700_000_000,
-  kind: 1,
-  tags: [] as string[][],
-  content: 'mock note',
-  sig: 'c'.repeat(128),
-};
+  return { tools, mockPool, getFreshPoolMock };
+}
 
 describe('note-tools publish error paths', () => {
-  beforeEach(() => {
+  let tools!: NoteToolsModule;
+  let mockPool!: MockPool;
+  let getFreshPoolMock!: ReturnType<typeof mock>;
+
+  beforeEach(async () => {
+    ({ tools, mockPool, getFreshPoolMock } = await loadNoteToolsWithMock());
     mockPool.close.mockClear();
     mockPool.publish.mockClear();
     getFreshPoolMock.mockClear();
     getFreshPoolMock.mockImplementation(() => mockPool);
+    mockPool.publish.mockImplementation(() => [
+      Promise.resolve({ success: true }),
+      Promise.resolve({ success: true }),
+    ]);
   });
 
   afterEach(() => {
-    getFreshPoolMock.mockImplementation(() => mockPool);
-    mockPool.publish.mockImplementation(() => [Promise.resolve({ success: true })]);
+    mock.restore();
   });
 
   afterAll(() => {
     mock.restore();
   });
+
+  const signedNote = {
+    id: 'a'.repeat(64),
+    pubkey: 'b'.repeat(64),
+    created_at: 1_700_000_000,
+    kind: 1,
+    tags: [] as string[][],
+    content: 'mock note',
+    sig: 'c'.repeat(128),
+  };
 
   it('postAnonymousNote returns failure when no relay accepts the event', async () => {
     mockPool.publish.mockReturnValue([
@@ -47,7 +71,7 @@ describe('note-tools publish error paths', () => {
       Promise.reject(new Error('relay timeout')),
     ]);
 
-    const result = await postAnonymousNote('hello', ['wss://relay.one', 'wss://relay.two']);
+    const result = await tools.postAnonymousNote('hello', ['wss://relay.one', 'wss://relay.two']);
 
     expect(result.success).toBe(false);
     expect(result.message).toBe('Failed to publish note to any relay');
@@ -59,7 +83,7 @@ describe('note-tools publish error paths', () => {
       throw new Error('publish explosion');
     });
 
-    const result = await postAnonymousNote('hello', ['wss://relay.one']);
+    const result = await tools.postAnonymousNote('hello', ['wss://relay.one']);
 
     expect(result.success).toBe(false);
     expect(result.message).toBe('Error posting anonymous note: publish explosion');
@@ -71,7 +95,7 @@ describe('note-tools publish error paths', () => {
       throw new Error('pool init failed');
     });
 
-    const result = await postAnonymousNote('hello', ['wss://relay.one']);
+    const result = await tools.postAnonymousNote('hello', ['wss://relay.one']);
 
     expect(result.success).toBe(false);
     expect(result.message).toBe('Fatal error: pool init failed');
@@ -84,7 +108,7 @@ describe('note-tools publish error paths', () => {
       Promise.reject(new Error('relay offline')),
     ]);
 
-    const result = await publishNote(signedNote, ['wss://relay.one', 'wss://relay.two']);
+    const result = await tools.publishNote(signedNote, ['wss://relay.one', 'wss://relay.two']);
 
     expect(result.success).toBe(false);
     expect(result.message).toBe('Failed to publish note to any relay');
@@ -96,7 +120,7 @@ describe('note-tools publish error paths', () => {
       throw new Error('publish crash');
     });
 
-    const result = await publishNote(signedNote, ['wss://relay.one']);
+    const result = await tools.publishNote(signedNote, ['wss://relay.one']);
 
     expect(result.success).toBe(false);
     expect(result.message).toBe('Error publishing note: publish crash');
@@ -108,7 +132,7 @@ describe('note-tools publish error paths', () => {
       throw new Error('pool unavailable');
     });
 
-    const result = await publishNote(signedNote, ['wss://relay.one']);
+    const result = await tools.publishNote(signedNote, ['wss://relay.one']);
 
     expect(result.success).toBe(false);
     expect(result.message).toBe('Fatal error: pool unavailable');

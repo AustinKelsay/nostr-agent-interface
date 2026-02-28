@@ -1,32 +1,52 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
 
-const mockPool = {
-  close: mock(async () => {}),
-  publish: mock(() => [] as Promise<{ success: boolean }>[]),
+type ProfileToolsModule = typeof import('../profile/profile-tools.js');
+
+type MockPool = {
+  close: ReturnType<typeof mock>;
+  publish: ReturnType<typeof mock>;
 };
 
-const getFreshPoolMock = mock(() => mockPool);
+async function loadProfileToolsWithMock(): Promise<{
+  tools: ProfileToolsModule;
+  mockPool: MockPool;
+  getFreshPoolMock: ReturnType<typeof mock>;
+}> {
+  const mockPool: MockPool = {
+    close: mock(async () => {}),
+    publish: mock(() => [] as { success: boolean }[]),
+  };
+  const getFreshPoolMock = mock(() => mockPool);
 
-mock.module('../utils/index.js', () => ({
-  DEFAULT_RELAYS: ['wss://mock.relay'],
-  getFreshPool: getFreshPoolMock,
-}));
+  mock.restore();
+  mock.module('../utils/index.js', () => ({
+    DEFAULT_RELAYS: ['wss://mock.relay'],
+    getFreshPool: getFreshPoolMock,
+  }));
 
-import { createProfile, postNote } from '../profile/profile-tools.js';
+  const importPath = `../profile/profile-tools.js?mock=${Date.now()}-${Math.random()}`;
+  const tools = (await import(importPath)) as ProfileToolsModule;
 
-const VALID_PRIVATE_KEY = '0'.repeat(63) + '1';
+  return { tools, mockPool, getFreshPoolMock };
+}
 
 describe('profile-tools publish error paths', () => {
-  beforeEach(() => {
+  const VALID_PRIVATE_KEY = '0'.repeat(63) + '1';
+
+  let tools!: ProfileToolsModule;
+  let mockPool!: MockPool;
+  let getFreshPoolMock!: ReturnType<typeof mock>;
+
+  beforeEach(async () => {
+    ({ tools, mockPool, getFreshPoolMock } = await loadProfileToolsWithMock());
     mockPool.close.mockClear();
     mockPool.publish.mockClear();
     getFreshPoolMock.mockClear();
     getFreshPoolMock.mockImplementation(() => mockPool);
-  });
-
-  afterEach(() => {
-    getFreshPoolMock.mockImplementation(() => mockPool);
-    mockPool.publish.mockImplementation(() => [Promise.resolve({ success: true })]);
+    mockPool.publish.mockImplementation(() => [
+      Promise.resolve({ success: true }),
+      Promise.resolve({ success: true }),
+    ]);
   });
 
   afterAll(() => {
@@ -39,7 +59,7 @@ describe('profile-tools publish error paths', () => {
       Promise.reject(new Error('relay timeout')),
     ]);
 
-    const result = await createProfile(
+    const result = await tools.createProfile(
       VALID_PRIVATE_KEY,
       { name: 'test-user' },
       ['wss://relay.one', 'wss://relay.two'],
@@ -55,7 +75,7 @@ describe('profile-tools publish error paths', () => {
       throw new Error('profile publish exploded');
     });
 
-    const result = await createProfile(
+    const result = await tools.createProfile(
       VALID_PRIVATE_KEY,
       { name: 'test-user' },
       ['wss://relay.one'],
@@ -73,7 +93,7 @@ describe('profile-tools publish error paths', () => {
       Promise.reject(new Error('relay down')),
     ]);
 
-    const result = await createProfile(
+    const result = await tools.createProfile(
       VALID_PRIVATE_KEY,
       { name: 'test-user' },
       ['wss://relay.one', 'wss://relay.two', 'wss://relay.three'],
@@ -91,7 +111,7 @@ describe('profile-tools publish error paths', () => {
       throw new Error('pool constructor failed');
     });
 
-    const result = await createProfile(
+    const result = await tools.createProfile(
       VALID_PRIVATE_KEY,
       { name: 'test-user' },
       ['wss://relay.one'],
@@ -108,7 +128,7 @@ describe('profile-tools publish error paths', () => {
       Promise.reject(new Error('relay timeout')),
     ]);
 
-    const result = await postNote(
+    const result = await tools.postNote(
       VALID_PRIVATE_KEY,
       'hello',
       [['t', 'nostr']],
@@ -125,7 +145,7 @@ describe('profile-tools publish error paths', () => {
       throw new Error('post publish exploded');
     });
 
-    const result = await postNote(
+    const result = await tools.postNote(
       VALID_PRIVATE_KEY,
       'hello',
       [['t', 'nostr']],
@@ -143,7 +163,7 @@ describe('profile-tools publish error paths', () => {
       Promise.resolve({ success: true }),
     ]);
 
-    const result = await postNote(
+    const result = await tools.postNote(
       VALID_PRIVATE_KEY,
       'hello',
       [['t', 'nostr']],

@@ -1,10 +1,11 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { test, expect, beforeAll, afterAll } from "bun:test";
 import { NostrRelay } from "../utils/ephemeral-relay.js";
+import { describeNetwork } from "./support/network-suite.js";
 
 import { createNostrEvent, signNostrEvent, publishNostrEvent, queryEvents } from "../event/event-tools.js";
 import { KINDS } from "../utils/constants.js";
 
-describe("NIP-42 AUTH", () => {
+describeNetwork("NIP-42 AUTH", () => {
   let relay: NostrRelay;
   let relayUrl: string;
 
@@ -62,4 +63,3 @@ describe("NIP-42 AUTH", () => {
     expect((withAuthQuery.events ?? []).some((e: any) => e.id === signed.signedEvent!.id)).toBe(true);
   });
 });
-

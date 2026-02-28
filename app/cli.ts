@@ -1,4 +1,4 @@
-import { createManagedMcpClient } from "./mcp-client.js";
+import { createCliToolRuntime } from "./cli/tool-runtime.js";
 
 type CliFlags = {
   json: boolean;
@@ -42,6 +42,10 @@ const JSON_SCHEMA_TYPES = new Set<JsonSchemaType>([
   "array",
   "object",
 ]);
+
+function isJsonMode(args: string[]): boolean {
+  return process.env.NOSTR_JSON_ONLY === "true" || args.includes("--json");
+}
 
 function printHelp() {
   console.log(`Nostr Agent CLI
@@ -517,16 +521,22 @@ function printToolContent(result: unknown) {
 }
 
 export async function runCli(args: string[]): Promise<number> {
-  const [command, ...rest] = args;
+  const shouldSuppressConsoleError = isJsonMode(args);
+  const originalConsoleError = console.error;
+  let runtime: Awaited<ReturnType<typeof createCliToolRuntime>> | undefined;
 
-  if (!command || command === "help" || command === "--help") {
-    printHelp();
-    return 0;
+  if (shouldSuppressConsoleError) {
+    console.error = () => {};
   }
 
-  let managed: Awaited<ReturnType<typeof createManagedMcpClient>> | undefined;
+  const [command, ...rest] = args;
 
   try {
+    if (!command || command === "help" || command === "--help") {
+      printHelp();
+      return 0;
+    }
+
     if (command === "list-tools") {
       const { flags, positionals } = parseFlags(rest, { allowStdin: false });
 
@@ -539,8 +549,8 @@ export async function runCli(args: string[]): Promise<number> {
         throw new Error("Usage: cli list-tools [--json]");
       }
 
-      managed = await createManagedMcpClient();
-      const response = await managed.client.listTools();
+      runtime = await createCliToolRuntime();
+      const response = await runtime.listTools();
       const tools = getToolsFromListResponse(response);
 
       if (flags.json) {
@@ -579,11 +589,8 @@ export async function runCli(args: string[]): Promise<number> {
 
       const toolArgs = flags.stdin ? await readStdinJsonObject() : parseJsonArgs(rawArgs);
 
-      managed = await createManagedMcpClient();
-      const result = await managed.client.callTool({
-        name: toolName,
-        arguments: toolArgs,
-      });
+      runtime = await createCliToolRuntime();
+      const result = await runtime.callTool(toolName, toolArgs);
 
       if (flags.json) {
         console.log(JSON.stringify(result, null, 2));
@@ -594,8 +601,8 @@ export async function runCli(args: string[]): Promise<number> {
       return isResultError(result) ? 1 : 0;
     }
 
-    managed = await createManagedMcpClient();
-    const listResponse = await managed.client.listTools();
+    runtime = await createCliToolRuntime();
+    const listResponse = await runtime.listTools();
     const tools = getToolsFromListResponse(listResponse);
     const tool = findToolByName(tools, command);
 
@@ -613,10 +620,7 @@ export async function runCli(args: string[]): Promise<number> {
     const toolArgs = flags.stdin ? await readStdinJsonObject() : parsedToolArgs;
     validateRequiredToolArgs(tool, toolArgs);
 
-    const result = await managed.client.callTool({
-      name: tool.name,
-      arguments: toolArgs,
-    });
+    const result = await runtime.callTool(tool.name, toolArgs);
 
     if (flags.json) {
       console.log(JSON.stringify(result, null, 2));
@@ -626,8 +630,12 @@ export async function runCli(args: string[]): Promise<number> {
 
     return isResultError(result) ? 1 : 0;
   } finally {
-    if (managed) {
-      await managed.close();
+    if (runtime) {
+      await runtime.close();
+    }
+
+    if (shouldSuppressConsoleError) {
+      console.error = originalConsoleError;
     }
   }
 }

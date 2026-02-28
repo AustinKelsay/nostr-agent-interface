@@ -1,9 +1,10 @@
-import { describe, it, test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
+import { test, expect, beforeAll, afterAll, beforeEach, afterEach } from 'bun:test';
 import { NostrRelay } from '../utils/ephemeral-relay.js';
 import { schnorr } from '@noble/curves/secp256k1';
 import { randomBytes } from 'node:crypto';
 import { sha256 } from '@noble/hashes/sha256';
 import WebSocket from 'ws';
+import { describeNetwork } from "./support/network-suite.js";
 
 // Generate a keypair for testing
 function generatePrivateKey(): string {
@@ -44,7 +45,7 @@ function createSignedEvent(privateKey: string, kind: number, content: string, ta
   };
 }
 
-describe('WebSocket Nostr Integration Tests', () => {
+describeNetwork('WebSocket Nostr Integration Tests', () => {
   let relay: NostrRelay;
   let relayUrl: string;
   let ws: WebSocket;

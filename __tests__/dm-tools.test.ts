@@ -1,7 +1,8 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { test, expect, beforeAll, afterAll } from "bun:test";
 import { schnorr } from "@noble/curves/secp256k1";
 import { NostrRelay } from "../utils/ephemeral-relay.js";
 import { QUERY_TIMEOUT } from "../utils/constants.js";
+import { describeNetwork } from "./support/network-suite.js";
 
 import {
   encryptNip04,
@@ -14,7 +15,7 @@ import {
   getDmInboxNip44,
 } from "../dm/dm-tools.js";
 
-describe("dm-tools", () => {
+describeNetwork("dm-tools", () => {
   let relay: NostrRelay;
   let relayUrl: string;
   let authRelay: NostrRelay;

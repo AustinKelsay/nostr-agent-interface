@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
+import { type ZodTypeAny } from "zod";
 import {
   NostrEvent,
   NostrFilter,
@@ -115,6 +116,13 @@ import {
   getDmInboxNip44ToolConfig,
   getDmInboxNip44
 } from "./dm/dm-tools.js";
+
+export type NostrToolRegistration = {
+  name: string;
+  description?: string;
+  inputSchema: ZodTypeAny | Record<string, unknown>;
+  handler: (params: Record<string, unknown>, extras: unknown) => Promise<unknown>;
+};
 
 // Set WebSocket implementation for Node.js (Bun has native WebSocket)
 if (typeof globalThis.WebSocket === 'undefined') {
@@ -313,12 +321,91 @@ export function buildAllZapsResponseText(params: {
   return `${summary}\n${formattedZaps}`;
 }
 
-export function createNostrMcpServer(): McpServer {
+export function createNostrMcpServer(onToolRegister?: (tool: NostrToolRegistration) => void): McpServer {
   // Create server instance
   const server = new McpServer({
     name: "nostr",
     version: "1.0.0",
   });
+
+  const originalToolRegistration = (server as any).tool.bind(server);
+  if (onToolRegister) {
+    const isObject = (value: unknown): value is Record<string, unknown> =>
+      typeof value === "object" && value !== null && !Array.isArray(value);
+
+    const looksLikeZodShape = (value: Record<string, unknown>): boolean => {
+      const keys = Object.keys(value);
+      if (keys.length === 0) {
+        return false;
+      }
+
+      return keys.every((key) => isObject(value[key]) && "_def" in value[key]);
+    };
+
+    const looksLikeInputSchema = (value: unknown): value is NostrToolRegistration["inputSchema"] =>
+      isObject(value) &&
+      ("_def" in value || "properties" in value || "type" in value || looksLikeZodShape(value));
+
+    (server as unknown as { tool: (...args: unknown[]) => unknown }).tool = (...args: unknown[]) => {
+      const [name] = args;
+      let description: string | undefined;
+      let inputSchema: NostrToolRegistration["inputSchema"] = {};
+      let handler: NostrToolRegistration["handler"] | undefined;
+
+      if (typeof args[args.length - 1] === "function") {
+        handler = args[args.length - 1] as NostrToolRegistration["handler"];
+      }
+
+      if (typeof name === "string" && typeof handler === "function") {
+        const argsSansHandler = args.slice(0, args.length - 1);
+
+        if (argsSansHandler.length === 2) {
+          // [name, handler] or [name, description]
+          const [, second] = argsSansHandler;
+          if (typeof second === "string") {
+            description = second;
+          } else if (looksLikeInputSchema(second)) {
+            inputSchema = second;
+          }
+        } else if (argsSansHandler.length === 3) {
+          // [name, description, inputSchema]
+          // [name, inputSchema, annotations]
+          const [, second, third] = argsSansHandler;
+          if (typeof second === "string") {
+            description = second;
+            if (looksLikeInputSchema(third)) {
+              inputSchema = third;
+            }
+          } else if (looksLikeInputSchema(second)) {
+            inputSchema = second;
+          }
+        } else if (argsSansHandler.length === 4) {
+          // [name, description, inputSchema, annotations]
+          // [name, inputSchema, annotations, ???]
+          const [, second, third] = argsSansHandler;
+          if (typeof second === "string") {
+            description = second;
+            if (looksLikeInputSchema(third)) {
+              inputSchema = third;
+            }
+          } else if (looksLikeInputSchema(second)) {
+            inputSchema = second;
+          }
+        }
+      }
+
+      if (typeof name === "string" && typeof handler === "function") {
+        onToolRegister({
+          name,
+          description,
+          inputSchema,
+          handler,
+        });
+      }
+
+      return originalToolRegistration(...args);
+    };
+  }
 
 // Register Nostr tools
 server.tool(

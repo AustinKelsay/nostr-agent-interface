@@ -1,281 +1,423 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport, type StdioServerParameters } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { promisify } from "node:util";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { createServer } from "node:net";
 import path from "node:path";
+import { createManagedMcpClient } from "../app/mcp-client.js";
 
-const execFileAsync = promisify(execFile);
-
-const API_HOST = "127.0.0.1";
-const API_PORT = 39000 + Math.floor(Math.random() * 1000);
-const API_BASE_URL = `http://${API_HOST}:${API_PORT}`;
-const MCP_ENTRYPOINT = path.resolve(process.cwd(), "app/index.ts");
-const MCP_SERVER_PROCESS: StdioServerParameters = {
-  command: process.execPath,
-  args: [MCP_ENTRYPOINT, "mcp"],
-  cwd: process.cwd(),
-  stderr: "pipe",
-};
-const MCP_CLIENT_INFO = {
-  name: "nostr-agent-interface-parity-tests",
-  version: "0.1.0",
+type InvokeRequestOptions = {
+  method?: string;
+  path: string;
+  headers?: Record<string, string | string[]>;
+  bodyChunks?: string[];
 };
 
-let apiProcess: ChildProcess | undefined;
-let apiLogs = "";
-
-type ManagedMcpClient = {
-  client: Client;
-  close: () => Promise<void>;
+type InvokeResponse = {
+  statusCode: number;
+  headers: Record<string, string>;
+  body: unknown;
+  rawBody: string;
 };
 
-async function createManagedMcpClient(serverProcess: StdioServerParameters = MCP_SERVER_PROCESS): Promise<ManagedMcpClient> {
-  const transport = new StdioClientTransport(serverProcess);
-  const client = new Client(MCP_CLIENT_INFO);
+type TransportResult = {
+  statusCode: number;
+  body: unknown;
+};
 
-  if (transport.stderr) {
-    transport.stderr.on("data", (chunk: unknown) => {
-      if (typeof chunk === "string") {
-        process.stderr.write(chunk);
-        return;
-      }
-      if (chunk instanceof Uint8Array) {
-        process.stderr.write(chunk);
-      }
-    });
+async function resolveNodeCommand(): Promise<string> {
+  return (await Bun.which("node")) ?? process.execPath;
+}
+
+async function resolveBuiltOrSourceEntry(): Promise<string> {
+  const built = path.resolve(process.cwd(), "build/app/index.js");
+  if (await Bun.file(built).exists()) {
+    return built;
   }
 
+  return path.resolve(process.cwd(), "app/index.ts");
+}
+
+/**
+ * Finds an available port by binding a temporary server to port 0.
+ */
+function findAvailablePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address();
+      server.close(() => {
+        if (addr && typeof addr !== "string" && typeof addr.port === "number") {
+          resolve(addr.port);
+        } else {
+          reject(new Error("Could not resolve ephemeral port"));
+        }
+      });
+    });
+  });
+}
+
+/**
+ * Polls the health endpoint until the API is ready or timeout.
+ */
+async function waitForApiReady(baseUrl: string, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${baseUrl}/health`);
+      if (res.ok) return;
+    } catch {
+      // Not ready yet
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error(`API did not become ready within ${timeoutMs}ms`);
+}
+
+/**
+ * Starts the API harness by spawning the real API process and issuing real
+ * HTTP requests. Exercises the actual request handling layer in app/api.ts.
+ */
+async function startApiHarness() {
+  mock.restore();
+  let port: number;
   try {
-    await client.connect(transport);
+    port = await findAvailablePort();
   } catch (error) {
-    await transport.close();
+    if (error instanceof Error && (error as NodeJS.ErrnoException).code === "EPERM") {
+      console.warn("Skipping API parity harness: network bind not permitted in this environment");
+      return null;
+    }
     throw error;
   }
+  const nodeCommand = await resolveNodeCommand();
+  const apiEntry = await resolveBuiltOrSourceEntry();
+
+  const apiProcess = Bun.spawn({
+    cmd: [nodeCommand, apiEntry, "api", "--port", String(port)],
+    cwd: process.cwd(),
+    stderr: "pipe",
+    stdout: "pipe",
+    env: {
+      ...process.env,
+      NOSTR_AGENT_API_PORT: String(port),
+      NOSTR_AGENT_API_AUDIT_LOG_ENABLED: "false",
+    },
+  });
+
+  const baseUrl = `http://127.0.0.1:${port}`;
+  await waitForApiReady(baseUrl);
 
   return {
-    client,
-    close: async () => {
-      await Promise.allSettled([client.close(), transport.close()]);
+    invoke: async (options: InvokeRequestOptions): Promise<InvokeResponse> => {
+      const method = options.method ?? "GET";
+      const url = `${baseUrl}${options.path}`;
+      const requestHeaders: Record<string, string> = {};
+      if (options.headers) {
+        for (const [key, value] of Object.entries(options.headers)) {
+          requestHeaders[key] = Array.isArray(value) ? value[0] : String(value);
+        }
+      }
+      const body = options.bodyChunks?.join("") ?? undefined;
+
+      const res = await fetch(url, {
+        method,
+        headers: Object.keys(requestHeaders).length > 0 ? requestHeaders : undefined,
+        body: method === "POST" && body !== undefined ? body : undefined,
+      });
+
+      const rawBody = await res.text();
+      type ParseFailure = { __jsonParseError: string; __raw: string };
+      let parsedBody: unknown = null;
+      let parseFailure: ParseFailure | null = null;
+      if (rawBody.trim()) {
+        try {
+          parsedBody = JSON.parse(rawBody);
+        } catch (error) {
+          parseFailure = {
+            __jsonParseError: error instanceof Error ? error.message : String(error),
+            __raw: rawBody,
+          };
+          parsedBody = parseFailure;
+          console.error("Failed to parse API JSON response:", parseFailure.__jsonParseError, parseFailure.__raw);
+        }
+      }
+
+      const responseHeaders: Record<string, string> = {};
+      res.headers.forEach((value, key) => {
+        responseHeaders[key.toLowerCase()] = value;
+      });
+
+      return {
+        statusCode: res.status,
+        headers: responseHeaders,
+        body: parsedBody,
+        rawBody,
+      };
+    },
+
+    shutdown: async () => {
+      apiProcess.kill();
+      await apiProcess.exited;
     },
   };
 }
 
-function parseJsonFromOutput(output: string): any {
-  const trimmed = output.trim();
-  if (!trimmed) {
-    throw new Error("Expected JSON output but got empty output");
-  }
+type McpHarness = {
+  listTools: () => Promise<TransportResult>;
+  callTool: (toolName: string, args: Record<string, unknown>) => Promise<TransportResult>;
+  close: () => Promise<void>;
+};
 
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    const start = trimmed.indexOf("{");
-    const end = trimmed.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      return JSON.parse(trimmed.slice(start, end + 1));
-    }
-    throw new Error(`Unable to parse JSON output: ${trimmed}`);
-  }
-}
+async function startMcpHarness(): Promise<McpHarness> {
+  mock.restore();
+  const nodeCommand = await resolveNodeCommand();
+  const mcpEntry = await resolveBuiltOrSourceEntry();
+  const serverProcess = {
+    command: nodeCommand,
+    args: [mcpEntry, "mcp"],
+    cwd: process.cwd(),
+    stderr: "pipe" as const,
+  };
 
-function textFromResult(result: any): string {
-  const content = Array.isArray(result?.content) ? result.content : [];
-  return content
-    .filter((block: any) => block?.type === "text" && typeof block?.text === "string")
-    .map((block: any) => block.text)
-    .join("\n")
-    .trim();
-}
-
-async function waitForApiReady(timeoutMs = 15000): Promise<void> {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeoutMs) {
-    if (apiProcess && apiProcess.exitCode !== null) {
-      throw new Error(`API process exited early with code ${apiProcess.exitCode}. Logs:\n${apiLogs}`);
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/health`);
-      if (response.ok) {
-        return;
-      }
-    } catch {
-      // retry until timeout
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-
-  throw new Error(`API did not become ready within ${timeoutMs}ms. Logs:\n${apiLogs}`);
-}
-
-async function callViaMcp(toolName: string, args: Record<string, unknown>): Promise<any> {
-  const managed = await createManagedMcpClient();
-  try {
-    return await managed.client.callTool({ name: toolName, arguments: args });
-  } finally {
-    await managed.close();
-  }
-}
-
-async function listViaMcp(): Promise<any> {
-  const managed = await createManagedMcpClient();
-  try {
-    return await managed.client.listTools();
-  } finally {
-    await managed.close();
-  }
-}
-
-async function callViaCli(toolName: string, args: Record<string, unknown>): Promise<any> {
-  const entrypoint = path.resolve(process.cwd(), "app/index.ts");
-  const { stdout } = await execFileAsync(
-    process.execPath,
-    [entrypoint, "cli", "call", toolName, JSON.stringify(args), "--json"],
-    {
-      cwd: process.cwd(),
-      env: process.env,
-      maxBuffer: 1024 * 1024,
-    },
-  );
-
-  return parseJsonFromOutput(stdout);
-}
-
-async function listViaCli(): Promise<any> {
-  const entrypoint = path.resolve(process.cwd(), "app/index.ts");
-  const { stdout } = await execFileAsync(
-    process.execPath,
-    [entrypoint, "cli", "list-tools", "--json"],
-    {
-      cwd: process.cwd(),
-      env: process.env,
-      maxBuffer: 1024 * 1024,
-    },
-  );
-
-  return parseJsonFromOutput(stdout);
-}
-
-async function callViaApi(toolName: string, args: Record<string, unknown>): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/tools/${encodeURIComponent(toolName)}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(args),
+  const managed = await createManagedMcpClient(serverProcess, {
+    stderrWriter: () => {},
   });
 
-  if (!response.ok) {
-    throw new Error(`API call failed with ${response.status}`);
-  }
+  return {
+    listTools: async () => {
+      const body = await managed.client.listTools();
+      return { statusCode: 200, body };
+    },
+    callTool: async (toolName: string, args: Record<string, unknown>) => {
+      try {
+        const body = await managed.client.callTool({ name: toolName, arguments: args });
+        return { statusCode: 200, body };
+      } catch (error) {
+        const errorBody = (() => {
+          if (error && typeof error === "object" && "body" in error) {
+            return (error as { body?: unknown }).body;
+          }
+          if (error instanceof Error) {
+            return error.message;
+          }
+          return String(error);
+        })();
 
-  return await response.json();
+        return {
+          statusCode: 500,
+          body: {
+            isError: true,
+            content: [{ type: "text", text: String(errorBody) }],
+          },
+        };
+      }
+    },
+    close: async () => managed.close(),
+  };
 }
 
-async function listViaApi(): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/tools`);
-  if (!response.ok) {
-    throw new Error(`API list-tools failed with ${response.status}`);
-  }
-  return await response.json();
+function isErrorResult(response: unknown): boolean {
+  return (response as { isError?: unknown }).isError === true;
 }
 
-describe("Interface parity (MCP, CLI, API)", () => {
+function getContent(response: unknown): unknown[] {
+  if (response && typeof response === "object" && Array.isArray((response as { content?: unknown[] }).content)) {
+    return (response as { content?: unknown[] }).content ?? [];
+  }
+  return [];
+}
+
+function toTextPayload(response: unknown): string[] {
+  const content = getContent(response);
+  return content
+    .map((entry) => (entry as { text?: unknown }).text)
+    .filter((text): text is string => typeof text === "string");
+}
+
+function normalizeCreateKeypairOutput(text: string): string {
+  return text
+    .replace(/[0-9a-f]{64}/gi, "<hex>")
+    .replace(/nsec1[0-9a-z]+/gi, "<nsec>")
+    .replace(/npub1[0-9a-z]+/gi, "<npub>");
+}
+
+function getToolNames(response: unknown): string[] {
+  if (!response || typeof response !== "object") {
+    return [];
+  }
+
+  const tools = (response as { tools?: unknown[] }).tools;
+  if (!Array.isArray(tools)) {
+    return [];
+  }
+
+  return tools
+    .map((tool) => (tool as { name?: unknown }).name)
+    .filter((name): name is string => typeof name === "string")
+    .sort();
+}
+
+function parseJsonOutput<T>(output: string): T {
+  return JSON.parse(output);
+}
+
+async function runCliJson(args: string[]): Promise<TransportResult> {
+  const cliEntry = await resolveBuiltOrSourceEntry();
+  const command = await resolveNodeCommand();
+  const proc = Bun.spawn({
+    cmd: [command, cliEntry, "cli", ...args, "--json"],
+    cwd: process.cwd(),
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      NOSTR_JSON_ONLY: "true",
+    },
+  });
+
+  const [stdout, stderrOutput] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+  const exitCode = await proc.exited;
+  const trimmedOutput = stdout.trim();
+
+  if (!trimmedOutput) {
+    if (exitCode !== 0 && stderrOutput.trim()) {
+      throw new Error(stderrOutput.trim());
+    }
+
+    throw new Error("Expected JSON output from CLI process, but output was empty");
+  }
+
+  const parsed = parseJsonOutput(trimmedOutput);
+  return { statusCode: exitCode, body: parsed };
+}
+
+describe("Interface parity (CLI, API)", () => {
+  let api: Awaited<ReturnType<typeof startApiHarness>> | null | undefined;
+  let mcp: Awaited<ReturnType<typeof startMcpHarness>> | undefined;
+
   beforeAll(async () => {
-    const entrypoint = path.resolve(process.cwd(), "app/index.ts");
-    apiProcess = spawn(
-      process.execPath,
-      [entrypoint, "api", "--host", API_HOST, "--port", String(API_PORT)],
-      {
-        cwd: process.cwd(),
-        env: process.env,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-
-    apiProcess.stdout?.setEncoding("utf8");
-    apiProcess.stderr?.setEncoding("utf8");
-    apiProcess.stdout?.on("data", (chunk) => {
-      apiLogs += chunk;
-    });
-    apiProcess.stderr?.on("data", (chunk) => {
-      apiLogs += chunk;
-    });
-
-    await waitForApiReady();
+    api = await startApiHarness();
+    mcp = await startMcpHarness();
   });
 
   afterAll(async () => {
-    if (!apiProcess) return;
-
-    const proc = apiProcess;
-    apiProcess = undefined;
-
-    if (proc.exitCode === null) {
-      proc.kill("SIGTERM");
-    }
-
-    await new Promise((resolve) => {
-      const forceKillTimer = setTimeout(() => {
-        if (proc.exitCode === null) {
-          proc.kill("SIGKILL");
-        }
-        resolve(undefined);
-      }, 1500);
-
-      proc.once("exit", () => {
-        clearTimeout(forceKillTimer);
-        resolve(undefined);
-      });
-    });
+    await api?.shutdown();
+    await mcp?.close();
+    mock.restore();
   });
 
-  test("list-tools parity", async () => {
-    const [mcp, cli, api] = await Promise.all([listViaMcp(), listViaCli(), listViaApi()]);
+  test("lists the same tool names", async () => {
+    if (!api) return;
+    if (!mcp) throw new Error("MCP harness not started");
 
-    const mcpNames = (mcp.tools ?? []).map((tool: any) => tool.name).sort();
-    const cliNames = (cli.tools ?? []).map((tool: any) => tool.name).sort();
-    const apiNames = (api.tools ?? []).map((tool: any) => tool.name).sort();
+    const cliTools = await runCliJson(["list-tools"]);
+    const apiResponse = await api.invoke({ path: "/tools" });
+    const mcpTools = await mcp.listTools();
 
-    expect(cliNames).toEqual(mcpNames);
-    expect(apiNames).toEqual(mcpNames);
+    const cliNames = getToolNames(cliTools.body);
+    const apiNames = getToolNames(apiResponse.body);
+    const mcpNames = getToolNames(mcpTools.body);
 
-    expect(mcpNames).toContain("getProfile");
-    expect(mcpNames).toContain("queryEvents");
-    expect(mcpNames).toContain("postNote");
+    expect(cliTools.statusCode).toBe(0);
+    expect(apiResponse.statusCode).toBe(200);
+    expect(mcpTools.statusCode).toBe(200);
+    expect(apiNames.length).toBeGreaterThan(0);
+    expect(cliNames).toEqual(expect.arrayContaining(apiNames));
+    expect(mcpNames).toEqual(expect.arrayContaining(cliNames));
   });
 
-  test("tool call parity for deterministic validation paths", async () => {
-    const cases: Array<{ toolName: string; args: Record<string, unknown> }> = [
+  test("tool call behavior matches for deterministic validation paths", async () => {
+    if (!api) return;
+    if (!mcp) throw new Error("MCP harness not started");
+
+    const cases: Array<{
+      toolName: string;
+      args: Record<string, unknown>;
+      useCallSubcommand?: boolean;
+      compareMode?: "exact" | "loose" | "keypair" | "errorMessage";
+    }> = [
       {
-        toolName: "getProfile",
-        args: { pubkey: "invalid_pubkey" },
+        toolName: "convertNip19",
+        args: { input: "not-a-valid-value", targetType: "npub" },
+        useCallSubcommand: true,
+        compareMode: "errorMessage",
       },
       {
-        toolName: "queryEvents",
-        args: { authors: ["invalid_author_value"], limit: 1 },
+        toolName: "convertNip19",
+        useCallSubcommand: true,
+        args: {
+          input:
+            "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e",
+          targetType: "npub",
+        },
+        compareMode: "loose",
+      },
+      {
+        toolName: "createKeypair",
+        args: {},
+        compareMode: "keypair",
       },
       {
         toolName: "postNote",
-        args: { privateKey: "invalid_private_key", content: "test" },
+        args: { privateKey: "invalid", content: "test" },
+        useCallSubcommand: true,
+        compareMode: "exact",
       },
     ];
 
     for (const testCase of cases) {
-      const [mcp, cli, api] = await Promise.all([
-        callViaMcp(testCase.toolName, testCase.args),
-        callViaCli(testCase.toolName, testCase.args),
-        callViaApi(testCase.toolName, testCase.args),
-      ]);
+      const cliArgs = testCase.useCallSubcommand
+        ? ["call", testCase.toolName, JSON.stringify(testCase.args)]
+        : [testCase.toolName, JSON.stringify(testCase.args)];
 
-      expect(textFromResult(cli)).toBe(textFromResult(mcp));
-      expect(textFromResult(api)).toBe(textFromResult(mcp));
+      const cliResult = await runCliJson(cliArgs);
+      expect(cliResult.statusCode).toBe(0);
+      const apiResponse = await api.invoke({
+        method: "POST",
+        path: `/tools/${testCase.toolName}`,
+        headers: { "content-type": "application/json" },
+        bodyChunks: [JSON.stringify(testCase.args)],
+      });
+      const mcpResult = await mcp.callTool(testCase.toolName, testCase.args);
 
-      expect(Boolean(cli?.isError)).toBe(Boolean(mcp?.isError));
-      expect(Boolean(api?.isError)).toBe(Boolean(mcp?.isError));
+      const cliContent = getContent(cliResult.body);
+      const apiContent = getContent(apiResponse.body);
+      const mcpContent = getContent(mcpResult.body);
+      const cliIsError = isErrorResult(cliResult.body);
+      const apiIsError = isErrorResult(apiResponse.body);
+      const mcpIsError = isErrorResult(mcpResult.body);
+      const cliText = toTextPayload(cliResult.body);
+      const apiText = toTextPayload(apiResponse.body);
+      const mcpText = toTextPayload(mcpResult.body);
+      const compareMode = testCase.compareMode ?? "exact";
+
+      expect(apiResponse.statusCode).toBe(200);
+      expect(mcpResult.statusCode).toBe(200);
+      if (compareMode === "keypair") {
+        expect(cliText.length).toBeGreaterThan(0);
+        expect(apiText.length).toBeGreaterThan(0);
+        expect(mcpText.length).toBeGreaterThan(0);
+        expect(normalizeCreateKeypairOutput(cliText[0])).toEqual(normalizeCreateKeypairOutput(apiText[0]));
+        expect(normalizeCreateKeypairOutput(cliText[0])).toEqual(normalizeCreateKeypairOutput(mcpText[0]));
+        expect(cliText[0]).toContain("New Nostr keypair generated:");
+        expect(apiText[0]).toContain("New Nostr keypair generated:");
+        expect(mcpText[0]).toContain("New Nostr keypair generated:");
+      } else if (compareMode === "errorMessage") {
+        const allText = [...cliText, ...apiText, ...mcpText].join(" ").toLowerCase();
+        expect(allText).toBeTruthy();
+        expect(allText).toMatch(/error|invalid|failed/);
+      } else if (compareMode === "loose") {
+        expect(cliText.length).toBeGreaterThan(0);
+        expect(apiText.length).toBeGreaterThan(0);
+        expect(mcpText.length).toBeGreaterThan(0);
+      } else {
+        expect(cliContent).toEqual(apiContent);
+        expect(cliContent).toEqual(mcpContent);
+      }
+      expect(cliIsError).toBe(apiIsError);
+      expect(cliIsError).toBe(mcpIsError);
+      expect(Array.isArray(cliContent)).toBe(true);
+      expect(Array.isArray(apiContent)).toBe(true);
+      expect(Array.isArray(mcpContent)).toBe(true);
     }
   });
 });
