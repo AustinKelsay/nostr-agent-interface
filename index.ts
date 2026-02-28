@@ -121,8 +121,7 @@ export type NostrToolRegistration = {
   name: string;
   description?: string;
   inputSchema: ZodTypeAny | Record<string, unknown>;
-  schema?: unknown;
-  handler: (params: Record<string, unknown>, extras: unknown) => unknown;
+  handler: (params: Record<string, unknown>, extras: unknown) => Promise<unknown>;
 };
 
 // Set WebSocket implementation for Node.js (Bun has native WebSocket)
@@ -332,19 +331,43 @@ export function createNostrMcpServer(onToolRegister?: (tool: NostrToolRegistrati
   const originalToolRegistration = (server as any).tool.bind(server);
   if (onToolRegister) {
     (server as unknown as { tool: (...args: unknown[]) => unknown }).tool = (...args: unknown[]) => {
-    const [name, description, inputSchema, handler] = args as [
-      string,
-      string | undefined,
-      NostrToolRegistration["inputSchema"],
-      (params: Record<string, unknown>, extras: unknown) => unknown,
-    ];
+      const [name] = args;
+      let description: string | undefined;
+      let inputSchema: NostrToolRegistration["inputSchema"] = {};
+      let handler: NostrToolRegistration["handler"] | undefined;
+
+      if (typeof name === "string") {
+        if (args.length === 2) {
+          const [, callback] = args;
+          if (typeof callback === "function") {
+            handler = callback as NostrToolRegistration["handler"];
+          }
+        } else if (args.length === 3) {
+          const [, second, third] = args;
+          if (typeof second === "string" && typeof third === "function") {
+            description = second;
+            handler = third as NostrToolRegistration["handler"];
+          } else if (typeof third === "function") {
+            inputSchema = (second ?? {}) as NostrToolRegistration["inputSchema"];
+            handler = third as NostrToolRegistration["handler"];
+          }
+        } else if (args.length >= 4) {
+          const [, second, third, fourth] = args;
+          if (typeof second === "string") {
+            description = second;
+          }
+          inputSchema = (third ?? {}) as NostrToolRegistration["inputSchema"];
+          if (typeof fourth === "function") {
+            handler = fourth as NostrToolRegistration["handler"];
+          }
+        }
+      }
 
       if (typeof name === "string" && typeof handler === "function") {
         onToolRegister({
           name,
           description,
           inputSchema,
-          schema: inputSchema,
           handler,
         });
       }

@@ -114,7 +114,9 @@ describe("CLI UX", () => {
 
     expect(result.code).toBe(0);
     expect(result.stderr).toBe("");
-    expect(() => JSON.parse(result.stdout.trim())).not.toThrow();
+
+    const parsed = JSON.parse(result.stdout.trim());
+    expect(Array.isArray(parsed.tools)).toBe(true);
   });
 
   test("supports NOSTR_JSON_ONLY for clean machine output", async () => {

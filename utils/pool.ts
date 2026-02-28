@@ -42,16 +42,12 @@ export class CompatibleRelayPool {
         reject(new Error(`Query timed out after ${safeTimeoutMs}ms`));
       }, safeTimeoutMs);
 
-      operation().then(
-        (value) => {
+      Promise.resolve()
+        .then(operation)
+        .then(resolve, reject)
+        .finally(() => {
           clearTimeout(timer);
-          resolve(value);
-        },
-        (error) => {
-          clearTimeout(timer);
-          reject(error);
-        },
-      );
+        });
     });
   }
 

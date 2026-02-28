@@ -334,8 +334,9 @@ If zap processing tests fail:
 
 ## Network-Dependent Suites
 
-`NOSTR_NETWORK_TESTS=1` enables network-backed suites that can be flaky in constrained environments:
+`NOSTR_NETWORK_TESTS=1` enables only the network-backed suites:
 
 1. `integration` and `websocket-integration`.
 2. `relay-tools`, `event-tools`, `social-tools`, `dm-tools`, `nip42-auth`, `ephemeral-relay`.
-3. API integration tests that bind ephemeral ports (`api-audit-logging`, `api-errors`).
+
+`api-audit-logging` and `api-errors` are regular API suites and are **not** gated by `NOSTR_NETWORK_TESTS`; they can still be potentially flaky in constrained environments because they bind ephemeral local ports.

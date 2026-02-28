@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import path from "node:path";
 import { createManagedMcpClient } from "../app/mcp-client.js";
 
@@ -21,11 +21,6 @@ type TransportResult = {
   body: unknown;
 };
 
-const signalHandlers = {
-  SIGINT: undefined as (() => Promise<void> | void) | undefined,
-  SIGTERM: undefined as (() => Promise<void> | void) | undefined,
-};
-
 async function resolveNodeCommand(): Promise<string> {
   return (await Bun.which("node")) ?? process.execPath;
 }
@@ -40,7 +35,7 @@ async function resolveCliEntry(): Promise<string> {
 }
 
 async function resolveMcpEntry(): Promise<string> {
-  const built = path.resolve(process.cwd(), "build/index.js");
+  const built = path.resolve(process.cwd(), "build/app/index.js");
   if (await Bun.file(built).exists()) {
     return built;
   }
@@ -48,123 +43,116 @@ async function resolveMcpEntry(): Promise<string> {
   return path.resolve(process.cwd(), "app/index.ts");
 }
 
-async function resolveToolRuntimeEntry(): Promise<string> {
-  const builtRuntime = path.resolve(process.cwd(), "build/app/tool-runtime.js");
-  if (await Bun.file(builtRuntime).exists()) {
-    return builtRuntime;
+async function startApiHarness() {
+  type RequestHandler = (req: any, res: any) => Promise<void> | void;
+
+  const handlers: { SIGINT?: () => void; SIGTERM?: () => void } = {};
+  const originalOnce = process.once;
+  (process as any).once = function patchedOnce(event: string, listener: () => void) {
+    if (event === "SIGINT" || event === "SIGTERM") {
+      handlers[event] = listener;
+      return this;
+    }
+    return originalOnce.call(this, event, listener);
+  };
+
+  let latestRequestHandler: RequestHandler | undefined;
+  const createServerMock = mock((handler: RequestHandler) => {
+    latestRequestHandler = handler;
+    return {
+      once: (_event: string, _listener: (...args: unknown[]) => void) => undefined,
+      listen: (_port: number, _host: string, callback?: () => void) => {
+        if (callback) callback();
+      },
+      close: (callback?: () => void) => {
+        if (callback) callback();
+      },
+    };
+  });
+
+  mock.module("node:http", () => ({
+    default: { createServer: createServerMock },
+    createServer: createServerMock,
+  }));
+
+  try {
+    const apiModule = await import("../app/api.js?interface-parity-api");
+    await apiModule.runApi([]);
+  } finally {
+    (process as any).once = originalOnce;
   }
 
-  const sourceRuntime = path.resolve(process.cwd(), "app/tool-runtime.js");
-  return `${sourceRuntime}?interface-parity-runtime`;
-}
+  if (!latestRequestHandler) {
+    throw new Error("API harness did not capture request handler");
+  }
 
-async function startApiHarness() {
-  const runtimeEntry = await resolveToolRuntimeEntry();
-  const runtimeModule = await import(runtimeEntry as string);
-  const toolRuntime = await runtimeModule.createInProcessToolRuntime();
-
-  const parseBody = (options: InvokeRequestOptions): Record<string, unknown> => {
-    const bodyChunks = options.bodyChunks ?? [];
-    if (bodyChunks.length === 0) {
-      return {};
-    }
-
-    const rawBody = bodyChunks.join("");
-    if (!rawBody.trim()) {
-      return {};
-    }
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(rawBody);
-    } catch {
-      throw new Error(`Expected JSON body object: ${rawBody}`);
-    }
-
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error(`Expected JSON body object, got ${typeof parsed}`);
-    }
-
-    return parsed as Record<string, unknown>;
-  };
-
-  const invokeResponse = (statusCode: number, payload: unknown): InvokeResponse => {
-    const rawBody = JSON.stringify(payload);
-    return {
-      statusCode,
-      headers: {
-        "content-type": "application/json; charset=utf-8",
-      },
-      body: statusCode === 204 ? null : payload,
-      rawBody,
-    };
-  };
-
-  signalHandlers.SIGINT = async () => {
-    await toolRuntime.close();
-  };
-  signalHandlers.SIGTERM = async () => {
-    await toolRuntime.close();
-  };
+  const capturedHandler = latestRequestHandler;
 
   return {
     invoke: async (options: InvokeRequestOptions): Promise<InvokeResponse> => {
-      try {
-        const method = options.method ?? "GET";
-        const normalizedPath = options.path.replace(/^\/v1(?=\/|$)/, "") || "/";
+      const reqHeaders: Record<string, string | string[]> = {
+        host: "127.0.0.1:3030",
+        ...(options.headers ?? {}),
+      };
+      const bodyChunks = options.bodyChunks ?? [];
 
-        if (method === "GET" && normalizedPath === "/tools") {
-          const tools = await toolRuntime.listTools();
-          return invokeResponse(200, tools);
-        }
-
-        if (method === "POST" && normalizedPath.startsWith("/tools/")) {
-          const toolName = decodeURIComponent(normalizedPath.replace("/tools/", ""));
-          if (!toolName) {
-            return invokeResponse(400, {
-              error: {
-                code: "invalid_request",
-                message: "Missing tool name in path.",
-                requestId: "local",
-              },
-            });
+      const req = {
+        method: options.method ?? "GET",
+        url: options.path,
+        headers: reqHeaders,
+        socket: { remoteAddress: "127.0.0.1" },
+        async *[Symbol.asyncIterator]() {
+          for (const chunk of bodyChunks) {
+            yield Buffer.from(chunk, "utf8");
           }
+        },
+      } as any;
 
-          const args = parseBody(options);
-          const result = await toolRuntime.callTool(toolName, args);
-          return invokeResponse(200, result);
-        }
+      let ended = false;
+      let rawBody = "";
+      const headers: Record<string, string> = {};
 
-        return invokeResponse(404, {
-          error: {
-            code: "not_found",
-            message: "Route not found.",
-            requestId: "local",
-          },
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error";
-        return invokeResponse(500, {
-          error: {
-            code: "internal_error",
-            message,
-            requestId: "local",
-          },
-        });
+      const res = {
+        statusCode: 200,
+        setHeader(name: string, value: unknown) {
+          headers[name.toLowerCase()] = Array.isArray(value) ? value.join(",") : String(value);
+        },
+        end(payload?: unknown) {
+          rawBody = typeof payload === "string" ? payload : payload ? String(payload) : "";
+          ended = true;
+        },
+      } as any;
+
+      await capturedHandler(req, res);
+      if (!ended) {
+        throw new Error("Expected response to be ended");
       }
+
+      let body: unknown = null;
+      try {
+        body = rawBody ? JSON.parse(rawBody) : null;
+      } catch {
+        body = null;
+      }
+
+      return {
+        statusCode: res.statusCode,
+        headers,
+        body,
+        rawBody,
+      };
     },
 
     shutdown: async () => {
-      const handler = signalHandlers.SIGINT ?? signalHandlers.SIGTERM;
-      if (!handler) {
+      const shutdownHandler = handlers.SIGTERM ?? handlers.SIGINT;
+      if (!shutdownHandler) {
         return;
       }
 
       const originalProcessExit = process.exit;
       process.exit = ((..._args: unknown[]) => undefined) as NodeJS.Process["exit"];
-
       try {
-        await handler();
+        shutdownHandler();
       } finally {
         process.exit = originalProcessExit;
       }

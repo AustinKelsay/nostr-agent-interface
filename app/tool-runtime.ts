@@ -6,8 +6,7 @@ type ToolDefinition = {
   name: string;
   description?: string;
   inputSchema?: unknown;
-  schema?: unknown;
-  handler?: (params: Record<string, unknown>, extras: unknown) => unknown;
+  handler?: (params: Record<string, unknown>, extras: unknown) => Promise<unknown>;
 };
 
 type ToolListResponse = {
@@ -137,7 +136,6 @@ function normalizeToolDefinition(tool: NostrToolRegistration): NostrToolRegistra
 
   return {
     ...tool,
-    schema: "schema" in tool ? tool.schema : tool.inputSchema,
     inputSchema: normalizedSchema,
   };
 }
@@ -176,7 +174,7 @@ async function createInProcessToolRuntimeInternal(): Promise<ToolRuntime> {
       }
 
       try {
-        const schema = buildArgumentSchema(tool.schema);
+        const schema = buildArgumentSchema(tool.inputSchema);
         if (schema) {
           const validation = schema.safeParse(args);
           if (!validation.success) {
