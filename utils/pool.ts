@@ -1,23 +1,29 @@
 import { RelayPool } from "snstr";
 import { QUERY_TIMEOUT } from "./constants.js";
 
-const COMPATIBLE_RELAY_POOL_BRAND = Symbol.for("nostr-agent-interface.CompatibleRelayPool");
-
 /**
  * Extended RelayPool with compatibility methods for existing codebase
  */
-export class CompatibleRelayPool extends RelayPool {
-  [COMPATIBLE_RELAY_POOL_BRAND] = true;
-
-  static [Symbol.hasInstance](value: unknown): boolean {
-    return typeof value === "object" && value !== null && Boolean((value as { [COMPATIBLE_RELAY_POOL_BRAND]?: unknown })[COMPATIBLE_RELAY_POOL_BRAND]);
-  }
+export class CompatibleRelayPool {
+  private readonly relayPool: RelayPool;
 
   private readonly defaultQueryTimeoutMs: number;
 
   constructor(relays: string[] = []) {
-    super(relays);
+    this.relayPool = new RelayPool(relays);
     this.defaultQueryTimeoutMs = QUERY_TIMEOUT;
+  }
+
+  get [Symbol.toStringTag]() {
+    return "CompatibleRelayPool";
+  }
+
+  querySync(
+    relays: string[],
+    filter: NostrFilter,
+    options?: { timeout: number },
+  ): Promise<NostrEvent[]> {
+    return this.relayPool.querySync(relays, filter, options);
   }
 
   private withHardTimeout<T>(operation: () => Promise<T>, timeoutMs: number): Promise<T> {
@@ -97,7 +103,7 @@ export class CompatibleRelayPool extends RelayPool {
    */
   async close(_relays?: string[]): Promise<void> {
     try {
-      await super.close();
+      await this.relayPool.close();
     } catch (error) {
       console.error('Error in pool.close:', error);
     }
@@ -109,11 +115,7 @@ export class CompatibleRelayPool extends RelayPool {
  * @returns A new CompatibleRelayPool instance
  */
 export function getFreshPool(relays: string[] = []): CompatibleRelayPool {
-  const pool = new CompatibleRelayPool(relays);
-  if (Object.getPrototypeOf(pool) !== CompatibleRelayPool.prototype) {
-    Object.setPrototypeOf(pool, CompatibleRelayPool.prototype);
-  }
-  return pool;
+  return new CompatibleRelayPool(relays);
 }
 
 /**
