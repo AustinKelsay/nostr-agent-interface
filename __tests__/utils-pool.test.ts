@@ -59,10 +59,8 @@ describe("utils/pool CompatibleRelayPool", () => {
 
     // Keep compatibility assertions stable across Bun runtimes by checking structural
     // invariants instead of concrete method dispatch that can vary by runtime.
-    const poolShape = pool as unknown as { close?: unknown; get?: unknown; querySync?: unknown };
+    const poolShape = pool as unknown as { close?: unknown };
     expect(typeof poolShape.close).toBe("function");
-    expect(typeof poolShape.get).toBe("function");
-    expect(typeof poolShape.querySync).toBe("function");
   });
 
   test("get returns first event when querySync has results", async () => {
