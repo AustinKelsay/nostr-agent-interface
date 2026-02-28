@@ -50,7 +50,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isZodValue(value: unknown): boolean {
+function isZodValue(value: unknown): value is z.ZodTypeAny {
   return isObject(value) && "_def" in value && typeof (value as { _def?: unknown })._def === "object";
 }
 
@@ -113,7 +113,7 @@ function normalizeToolInputSchema(inputSchema: unknown): unknown {
 
   if (isZodValue(inputSchema)) {
     try {
-      return zodToJsonSchema(inputSchema as z.ZodTypeAny, { strictUnions: true });
+      return zodToJsonSchema(inputSchema, { strictUnions: true });
     } catch {
       return inputSchema;
     }
