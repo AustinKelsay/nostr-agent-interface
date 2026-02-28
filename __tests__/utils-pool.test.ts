@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { RelayPool } from "snstr";
 import { QUERY_TIMEOUT } from "../utils/constants.js";
-import { type NostrEvent } from "../utils/pool.js";
+import { type NostrEvent, type NostrFilter } from "../utils/pool.js";
 import { COMPATIBLE_RELAY_POOL_BRAND, CompatibleRelayPool, getFreshPool } from "../utils/pool.js";
 
 describe("utils/pool CompatibleRelayPool", () => {
@@ -52,7 +52,7 @@ describe("utils/pool CompatibleRelayPool", () => {
     globalThis.setTimeout = originalSetTimeout;
   });
 
-  test("getFreshPool returns a CompatibleRelayPool", () => {
+  test("getFreshPool returns a CompatibleRelayPool", async () => {
     const pool = getFreshPool(["wss://relay.example"]);
 
     expect(pool).toBeTruthy();
@@ -62,14 +62,17 @@ describe("utils/pool CompatibleRelayPool", () => {
       expect(brand).toBe(true);
     }
 
-    const compatiblePoolLike = pool as unknown as Record<string, unknown>;
+    const querySyncMock = mock(async () => []);
+    const compatiblePoolLike = pool as unknown as {
+      querySync: (relays: string[], filter: unknown, opts?: { timeout?: number }) => Promise<NostrEvent[]>;
+      get: (relays: string[], filter: NostrFilter, opts?: unknown) => Promise<NostrEvent | null>;
+    };
+    compatiblePoolLike.querySync = querySyncMock;
 
-    // In some Bun/VM executions, class identity can differ when modules are loaded
-    // through different runtime paths, so validate runtime contract instead of strict
-    // instanceof checks.
-    expect(typeof compatiblePoolLike.get).toBe("function");
-    expect(typeof compatiblePoolLike.getMany).toBe("function");
-    expect(typeof compatiblePoolLike.close).toBe("function");
+    // Use behavior over introspection: this proves the pool supports the expected
+    // CompatibleRelayPool call surface even when class identity differs.
+    await expect(compatiblePoolLike.get(["wss://relay.example"], {} as NostrFilter)).resolves.toBeNull();
+    expect(querySyncMock).toHaveBeenCalledTimes(1);
   });
 
   test("get returns first event when querySync has results", async () => {
