@@ -55,16 +55,22 @@ describe("utils/pool CompatibleRelayPool", () => {
   test("getFreshPool returns a CompatibleRelayPool", () => {
     const pool = getFreshPool(["wss://relay.example"]);
 
-    if (pool instanceof CompatibleRelayPool) {
-      return;
-    }
+    expect(pool).toBeTruthy();
+
+    const compatiblePoolLike = pool as Partial<{
+      get: (...args: unknown[]) => unknown;
+      getMany: (...args: unknown[]) => unknown;
+      close: (...args: unknown[]) => unknown;
+      querySync: (...args: unknown[]) => unknown;
+    }>;
 
     // In some Bun/VM executions, class identity can differ when modules are loaded
-    // through different runtime loader paths, so fall back to contract-based validation.
-    expect(typeof pool).toBe("object");
-    expect(typeof (pool as { get?: unknown }).get).toBe("function");
-    expect(typeof (pool as { getMany?: unknown }).getMany).toBe("function");
-    expect(typeof (pool as { close?: unknown }).close).toBe("function");
+    // through different runtime paths, so validate runtime contract instead of strict
+    // instanceof checks.
+    expect(typeof compatiblePoolLike.get).toBe("function");
+    expect(typeof compatiblePoolLike.getMany).toBe("function");
+    expect(typeof compatiblePoolLike.close).toBe("function");
+    expect(typeof compatiblePoolLike.querySync).toBe("function");
   });
 
   test("get returns first event when querySync has results", async () => {
