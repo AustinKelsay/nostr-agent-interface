@@ -59,9 +59,10 @@ describe("utils/pool CompatibleRelayPool", () => {
 
     // Keep compatibility assertions stable across Bun runtimes by checking structural
     // invariants instead of concrete method dispatch that can vary by runtime.
-    expect(typeof (pool as unknown as { close: unknown }).close).toBe("function");
-    expect(Object.prototype.hasOwnProperty.call(pool, "relayPool")).toBe(true);
-    expect(Object.prototype.hasOwnProperty.call(pool, "defaultQueryTimeoutMs")).toBe(true);
+    const poolShape = pool as unknown as { close?: unknown; get?: unknown; querySync?: unknown };
+    expect(typeof poolShape.close).toBe("function");
+    expect(typeof poolShape.get).toBe("function");
+    expect(typeof poolShape.querySync).toBe("function");
   });
 
   test("get returns first event when querySync has results", async () => {
