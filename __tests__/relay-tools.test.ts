@@ -2,10 +2,11 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { schnorr } from "@noble/curves/secp256k1";
 import { NostrRelay } from "../utils/ephemeral-relay.js";
 import { KINDS, QUERY_TIMEOUT } from "../utils/constants.js";
+import { describeNetwork } from "./support/network-suite.js";
 
 import { setRelayList, getRelayList } from "../relay/relay-tools.js";
 
-describe("relay-tools", () => {
+describeNetwork("relay-tools", () => {
   let relay: NostrRelay;
   let relayUrl: string;
   let authRelay: NostrRelay;

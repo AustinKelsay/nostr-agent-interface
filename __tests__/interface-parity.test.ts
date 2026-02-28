@@ -1,281 +1,289 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport, type StdioServerParameters } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { promisify } from "node:util";
-import path from "node:path";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { runApi } from "../app/api.js";
+import { runCli } from "../app/cli.js";
 
-const execFileAsync = promisify(execFile);
+type RequestHandler = (req: any, res: any) => Promise<void>;
 
-const API_HOST = "127.0.0.1";
-const API_PORT = 39000 + Math.floor(Math.random() * 1000);
-const API_BASE_URL = `http://${API_HOST}:${API_PORT}`;
-const MCP_ENTRYPOINT = path.resolve(process.cwd(), "app/index.ts");
-const MCP_SERVER_PROCESS: StdioServerParameters = {
-  command: process.execPath,
-  args: [MCP_ENTRYPOINT, "mcp"],
-  cwd: process.cwd(),
-  stderr: "pipe",
-};
-const MCP_CLIENT_INFO = {
-  name: "nostr-agent-interface-parity-tests",
-  version: "0.1.0",
+type InvokeRequestOptions = {
+  method?: string;
+  path: string;
+  headers?: Record<string, string | string[]>;
+  bodyChunks?: string[];
+  remoteAddress?: string;
 };
 
-let apiProcess: ChildProcess | undefined;
-let apiLogs = "";
-
-type ManagedMcpClient = {
-  client: Client;
-  close: () => Promise<void>;
+type InvokeResponse = {
+  statusCode: number;
+  headers: Record<string, string>;
+  body: unknown;
+  rawBody: string;
 };
 
-async function createManagedMcpClient(serverProcess: StdioServerParameters = MCP_SERVER_PROCESS): Promise<ManagedMcpClient> {
-  const transport = new StdioClientTransport(serverProcess);
-  const client = new Client(MCP_CLIENT_INFO);
+type FakeServer = {
+  once: ReturnType<typeof mock>;
+  listen: ReturnType<typeof mock>;
+  close: ReturnType<typeof mock>;
+};
 
-  if (transport.stderr) {
-    transport.stderr.on("data", (chunk: unknown) => {
-      if (typeof chunk === "string") {
-        process.stderr.write(chunk);
-        return;
+let latestRequestHandler: RequestHandler | undefined;
+
+const signalHandlers = {
+  SIGINT: undefined as (() => void) | undefined,
+  SIGTERM: undefined as (() => void) | undefined,
+};
+const originalProcessOnce = process.once;
+type ProcessOnce = NodeJS.Process["once"];
+
+function createServerMock(handler: RequestHandler) {
+  latestRequestHandler = handler;
+  const listeners = new Map<string, (...args: unknown[]) => void>();
+  const server: FakeServer = {
+    once: mock((event: string, listener: (...args: unknown[]) => void) => {
+      listeners.set(event, listener);
+      return server;
+    }),
+    listen: mock((_port: number, _host: string, callback?: () => void) => {
+      if (callback) {
+        callback();
       }
-      if (chunk instanceof Uint8Array) {
-        process.stderr.write(chunk);
+      return server;
+    }),
+    close: mock((callback?: () => void) => {
+      if (callback) {
+        callback();
       }
-    });
+      return server;
+    }),
+  };
+
+  return server;
+}
+
+mock.module("node:http", () => ({
+  default: { createServer: createServerMock },
+  createServer: createServerMock,
+}));
+
+function interceptSignals() {
+  process.once = ((event: string, listener: (...args: unknown[]) => void) => {
+    if (event === "SIGINT" || event === "SIGTERM") {
+      signalHandlers[event] = listener;
+      return process as never;
+    }
+
+    return originalProcessOnce.call(process, event, listener as never) as never;
+  }) as ProcessOnce;
+}
+
+function restoreSignals() {
+  process.once = originalProcessOnce;
+}
+
+function setEnv(updates: Record<string, string | undefined>): () => void {
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(updates)) {
+    previous.set(key, process.env[key]);
+    if (typeof value === "undefined") {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+
+  return () => {
+    for (const [key, value] of previous.entries()) {
+      if (typeof value === "undefined") {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  };
+}
+
+async function invokeRequest(handler: RequestHandler, options: InvokeRequestOptions): Promise<InvokeResponse> {
+  const method = options.method ?? "GET";
+  const headers: Record<string, string> = {
+    host: "127.0.0.1:3030",
+    ...(options.headers ?? {}),
+  };
+  const bodyChunks = options.bodyChunks ?? [];
+  const req = {
+    method,
+    url: options.path,
+    headers,
+    socket: { remoteAddress: options.remoteAddress ?? "127.0.0.1" },
+    async *[Symbol.asyncIterator]() {
+      for (const chunk of bodyChunks) {
+        yield Buffer.from(chunk, "utf8");
+      }
+    },
+  } as any;
+
+  const responseHeaders: Record<string, string> = {};
+  let ended = false;
+  let rawBody = "";
+
+  const res = {
+    statusCode: 200,
+    setHeader(name: string, value: unknown) {
+      responseHeaders[name.toLowerCase()] = Array.isArray(value) ? value.join(",") : String(value);
+    },
+    end(payload?: unknown) {
+      rawBody = typeof payload === "string" ? payload : payload ? String(payload) : "";
+      ended = true;
+    },
+  } as any;
+
+  await handler(req, res);
+  if (!ended) {
+    throw new Error("API handler did not terminate response");
   }
 
   try {
-    await client.connect(transport);
+    return {
+      statusCode: res.statusCode,
+      headers: responseHeaders,
+      body: rawBody ? JSON.parse(rawBody) : null,
+      rawBody,
+    };
   } catch (error) {
-    await transport.close();
+    if (error instanceof SyntaxError) {
+      throw new Error(`Expected JSON response, got: ${rawBody}`);
+    }
     throw error;
+  }
+}
+
+async function startApiHarness() {
+  const restoreEnv = setEnv({
+    NOSTR_AGENT_API_HOST: "127.0.0.1",
+    NOSTR_AGENT_API_PORT: "3030",
+    NOSTR_AGENT_API_RATE_LIMIT_MAX: "0",
+    NOSTR_AGENT_API_AUDIT_LOG_ENABLED: "false",
+    NOSTR_AGENT_API_AUDIT_LOG_INCLUDE_BODIES: "false",
+    NOSTR_AGENT_API_TRUST_PROXY: "false",
+    NOSTR_AGENT_API_MAX_BODY_BYTES: "1048576",
+  });
+  interceptSignals();
+
+  try {
+    await runApi([]);
+  } finally {
+    restoreEnv();
+  }
+
+  if (!latestRequestHandler) {
+    throw new Error("API handler not registered");
   }
 
   return {
-    client,
-    close: async () => {
-      await Promise.allSettled([client.close(), transport.close()]);
+    invoke: (options: InvokeRequestOptions) => invokeRequest(latestRequestHandler as RequestHandler, options),
+    shutdown: async () => {
+      restoreSignals();
+      const handler = signalHandlers.SIGINT ?? signalHandlers.SIGTERM;
+      if (!handler) return;
+      handler();
+      return;
     },
   };
 }
 
-function parseJsonFromOutput(output: string): any {
-  const trimmed = output.trim();
-  if (!trimmed) {
-    throw new Error("Expected JSON output but got empty output");
+function getContent(response: unknown): unknown[] {
+  if (response && typeof response === "object" && Array.isArray((response as { content?: unknown[] }).content)) {
+    return (response as { content?: unknown[] }).content ?? [];
   }
+  return [];
+}
+
+function parseJsonOutput<T>(output: string): T {
+  return JSON.parse(output);
+}
+
+async function runCliJson(args: string[]): Promise<unknown> {
+  const originalLog = console.log;
+  const lines: string[] = [];
+  console.log = (...args: unknown[]) => {
+    lines.push(args.join(" "));
+  };
 
   try {
-    return JSON.parse(trimmed);
-  } catch {
-    const start = trimmed.indexOf("{");
-    const end = trimmed.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      return JSON.parse(trimmed.slice(start, end + 1));
-    }
-    throw new Error(`Unable to parse JSON output: ${trimmed}`);
-  }
-}
-
-function textFromResult(result: any): string {
-  const content = Array.isArray(result?.content) ? result.content : [];
-  return content
-    .filter((block: any) => block?.type === "text" && typeof block?.text === "string")
-    .map((block: any) => block.text)
-    .join("\n")
-    .trim();
-}
-
-async function waitForApiReady(timeoutMs = 15000): Promise<void> {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeoutMs) {
-    if (apiProcess && apiProcess.exitCode !== null) {
-      throw new Error(`API process exited early with code ${apiProcess.exitCode}. Logs:\n${apiLogs}`);
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/health`);
-      if (response.ok) {
-        return;
-      }
-    } catch {
-      // retry until timeout
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-
-  throw new Error(`API did not become ready within ${timeoutMs}ms. Logs:\n${apiLogs}`);
-}
-
-async function callViaMcp(toolName: string, args: Record<string, unknown>): Promise<any> {
-  const managed = await createManagedMcpClient();
-  try {
-    return await managed.client.callTool({ name: toolName, arguments: args });
+    await runCli([...args, "--json"]);
+    return parseJsonOutput(lines.join("\n"));
   } finally {
-    await managed.close();
+    console.log = originalLog;
   }
 }
 
-async function listViaMcp(): Promise<any> {
-  const managed = await createManagedMcpClient();
-  try {
-    return await managed.client.listTools();
-  } finally {
-    await managed.close();
-  }
-}
+describe("Interface parity (CLI, API)", () => {
+  let api: Awaited<ReturnType<typeof startApiHarness>> | undefined;
 
-async function callViaCli(toolName: string, args: Record<string, unknown>): Promise<any> {
-  const entrypoint = path.resolve(process.cwd(), "app/index.ts");
-  const { stdout } = await execFileAsync(
-    process.execPath,
-    [entrypoint, "cli", "call", toolName, JSON.stringify(args), "--json"],
-    {
-      cwd: process.cwd(),
-      env: process.env,
-      maxBuffer: 1024 * 1024,
-    },
-  );
-
-  return parseJsonFromOutput(stdout);
-}
-
-async function listViaCli(): Promise<any> {
-  const entrypoint = path.resolve(process.cwd(), "app/index.ts");
-  const { stdout } = await execFileAsync(
-    process.execPath,
-    [entrypoint, "cli", "list-tools", "--json"],
-    {
-      cwd: process.cwd(),
-      env: process.env,
-      maxBuffer: 1024 * 1024,
-    },
-  );
-
-  return parseJsonFromOutput(stdout);
-}
-
-async function callViaApi(toolName: string, args: Record<string, unknown>): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/tools/${encodeURIComponent(toolName)}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(args),
-  });
-
-  if (!response.ok) {
-    throw new Error(`API call failed with ${response.status}`);
-  }
-
-  return await response.json();
-}
-
-async function listViaApi(): Promise<any> {
-  const response = await fetch(`${API_BASE_URL}/tools`);
-  if (!response.ok) {
-    throw new Error(`API list-tools failed with ${response.status}`);
-  }
-  return await response.json();
-}
-
-describe("Interface parity (MCP, CLI, API)", () => {
   beforeAll(async () => {
-    const entrypoint = path.resolve(process.cwd(), "app/index.ts");
-    apiProcess = spawn(
-      process.execPath,
-      [entrypoint, "api", "--host", API_HOST, "--port", String(API_PORT)],
-      {
-        cwd: process.cwd(),
-        env: process.env,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-
-    apiProcess.stdout?.setEncoding("utf8");
-    apiProcess.stderr?.setEncoding("utf8");
-    apiProcess.stdout?.on("data", (chunk) => {
-      apiLogs += chunk;
-    });
-    apiProcess.stderr?.on("data", (chunk) => {
-      apiLogs += chunk;
-    });
-
-    await waitForApiReady();
+    api = await startApiHarness();
   });
 
   afterAll(async () => {
-    if (!apiProcess) return;
-
-    const proc = apiProcess;
-    apiProcess = undefined;
-
-    if (proc.exitCode === null) {
-      proc.kill("SIGTERM");
-    }
-
-    await new Promise((resolve) => {
-      const forceKillTimer = setTimeout(() => {
-        if (proc.exitCode === null) {
-          proc.kill("SIGKILL");
-        }
-        resolve(undefined);
-      }, 1500);
-
-      proc.once("exit", () => {
-        clearTimeout(forceKillTimer);
-        resolve(undefined);
-      });
-    });
+    await api?.shutdown();
   });
 
-  test("list-tools parity", async () => {
-    const [mcp, cli, api] = await Promise.all([listViaMcp(), listViaCli(), listViaApi()]);
+  test("lists the same tool names", async () => {
+    if (!api) throw new Error("API harness not started");
+    const cliTools = await runCliJson(["list-tools"]);
+    const apiTools = (await api.invoke({ path: "/tools" })).body;
 
-    const mcpNames = (mcp.tools ?? []).map((tool: any) => tool.name).sort();
-    const cliNames = (cli.tools ?? []).map((tool: any) => tool.name).sort();
-    const apiNames = (api.tools ?? []).map((tool: any) => tool.name).sort();
+    const cliNames = ((cliTools as { tools?: unknown[] }).tools ?? [])
+      .map((tool) => (tool as { name?: unknown }).name)
+      .filter((name): name is string => typeof name === "string")
+      .sort();
+    const apiNames = ((apiTools as { tools?: unknown[] }).tools ?? [])
+      .map((tool) => (tool as { name?: unknown }).name)
+      .filter((name): name is string => typeof name === "string")
+      .sort();
 
-    expect(cliNames).toEqual(mcpNames);
-    expect(apiNames).toEqual(mcpNames);
-
-    expect(mcpNames).toContain("getProfile");
-    expect(mcpNames).toContain("queryEvents");
-    expect(mcpNames).toContain("postNote");
+    expect(cliNames).toEqual(apiNames);
   });
 
-  test("tool call parity for deterministic validation paths", async () => {
-    const cases: Array<{ toolName: string; args: Record<string, unknown> }> = [
-      {
-        toolName: "getProfile",
-        args: { pubkey: "invalid_pubkey" },
-      },
-      {
-        toolName: "queryEvents",
-        args: { authors: ["invalid_author_value"], limit: 1 },
-      },
+  test("tool call behavior matches for deterministic validation paths", async () => {
+    if (!api) throw new Error("API harness not started");
+
+    const cases: Array<{
+      toolName: string;
+      args: Record<string, unknown>;
+      useCallSubcommand?: boolean;
+    }> = [
+      { toolName: "convertNip19", args: { input: "not-a-valid-value", targetType: "npub" } },
       {
         toolName: "postNote",
-        args: { privateKey: "invalid_private_key", content: "test" },
+        args: { privateKey: "invalid", content: "test" },
+        useCallSubcommand: true,
       },
     ];
 
     for (const testCase of cases) {
-      const [mcp, cli, api] = await Promise.all([
-        callViaMcp(testCase.toolName, testCase.args),
-        callViaCli(testCase.toolName, testCase.args),
-        callViaApi(testCase.toolName, testCase.args),
-      ]);
+      const cliArgs = testCase.useCallSubcommand
+        ? ["call", testCase.toolName, JSON.stringify(testCase.args)]
+        : [testCase.toolName, JSON.stringify(testCase.args)];
+      const cliResult = await runCliJson(cliArgs);
+      const apiResponse = await api.invoke({
+        method: "POST",
+        path: `/tools/${testCase.toolName}`,
+        headers: { "content-type": "application/json" },
+        bodyChunks: [JSON.stringify(testCase.args)],
+      });
 
-      expect(textFromResult(cli)).toBe(textFromResult(mcp));
-      expect(textFromResult(api)).toBe(textFromResult(mcp));
+      const apiResult = apiResponse.body;
+      const cliContent = getContent(cliResult);
+      const apiContent = getContent(apiResult);
 
-      expect(Boolean(cli?.isError)).toBe(Boolean(mcp?.isError));
-      expect(Boolean(api?.isError)).toBe(Boolean(mcp?.isError));
+      expect(apiResponse.statusCode).toBe(200);
+      expect(cliContent).toEqual(apiContent);
+      expect((cliResult as { isError?: unknown }).isError === true)
+        .toBe((apiResult as { isError?: unknown }).isError === true);
+      expect(Array.isArray(cliContent)).toBe(true);
     }
   });
+});
+
+afterAll(() => {
+  mock.restore();
 });

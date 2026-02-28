@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
+import { describeNetwork } from "./support/network-suite.js";
 
 const API_HOST = "127.0.0.1";
 const API_PORT = 41000 + Math.floor(Math.random() * 1000);
@@ -101,7 +102,7 @@ async function stopApiProcess(apiProcess: ChildProcess | undefined): Promise<voi
   });
 }
 
-describe("API error envelope", () => {
+describeNetwork("API error envelope", () => {
   let apiProcess: ChildProcess | undefined;
   let getLogs = () => "";
 
@@ -176,7 +177,7 @@ describe("API error envelope", () => {
   });
 });
 
-describe("API optional key auth", () => {
+describeNetwork("API optional key auth", () => {
   let apiProcess: ChildProcess | undefined;
   let getLogs = () => "";
 
@@ -251,7 +252,7 @@ describe("API optional key auth", () => {
   });
 });
 
-describe("API rate limiting", () => {
+describeNetwork("API rate limiting", () => {
   let apiProcess: ChildProcess | undefined;
   let getLogs = () => "";
 
@@ -291,7 +292,7 @@ describe("API rate limiting", () => {
   });
 });
 
-describe("API rate limiting without auth", () => {
+describeNetwork("API rate limiting without auth", () => {
   let apiProcess: ChildProcess | undefined;
   let getLogs = () => "";
 
@@ -331,7 +332,7 @@ describe("API rate limiting without auth", () => {
   });
 });
 
-describe("API rate limiting ignores spoofed proxy headers by default", () => {
+describeNetwork("API rate limiting ignores spoofed proxy headers by default", () => {
   let apiProcess: ChildProcess | undefined;
   let getLogs = () => "";
 
@@ -371,7 +372,7 @@ describe("API rate limiting ignores spoofed proxy headers by default", () => {
   });
 });
 
-describe("API request body size limits", () => {
+describeNetwork("API request body size limits", () => {
   let apiProcess: ChildProcess | undefined;
   let getLogs = () => "";
 

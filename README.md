@@ -4,14 +4,14 @@
 
 Nostr Agent Interface extends the original **Nostr MCP Server**.
 
-Nostr MCP Server established the core JARC-style Nostr toolset (stable tool names + JSON input contracts). This project keeps that same core contract and exposes it across a broader runtime surface where **CLI** and **HTTP API** are the default operational interfaces, while **MCP** remains a supported compatibility mode.
+Nostr MCP Server established the core JARC-style Nostr toolset (stable tool names + JSON input contracts). This project keeps that same core contract and exposes it through direct **CLI** and **HTTP API** runtimes as the default operational interfaces, with **MCP** remaining a separate compatibility mode.
 
 ## Positioning
 
 1. **Nostr MCP Server remains valid on its own** and is not being deprecated by this project.
 2. **Nostr Agent Interface is the preferred operational interface** for mixed agentic workflows.
-3. **CLI/API are first-class for "pick it up, do work, put it down" loops.**
-4. **MCP is supported when a runtime requires it.**
+3. **CLI/API are first-class for automation, scripts, and service orchestration.**
+4. **MCP is supported for MCP-native runtimes and clients that require protocol-level integration.**
 
 ## Interface Modes
 
@@ -36,14 +36,20 @@ nostr-agent-interface cli getProfile --pubkey npub... --json
 nostr-agent-interface cli convertNip19 --input npub... --target-type hex --json
 ```
 
-Tool-specific help (derived from MCP tool schema):
+Tool-specific help (derived from the canonical tool schema):
 
 ```bash
 nostr-agent-interface cli getProfile --help
 nostr-agent-interface cli postNote --help
 ```
 
-Legacy-compatible invocation style is still available:
+MCP is intentionally separate from CLI/API so MCP-native tools can connect directly when needed:
+
+```bash
+nostr-agent-interface mcp
+```
+
+Legacy-compatible invocation style for CLI is still available:
 
 ```bash
 nostr-agent-interface cli call getProfile '{"pubkey":"npub..."}' --json
@@ -102,7 +108,9 @@ Endpoints:
 5. `GET /v1/tools`
 6. `POST /v1/tools/:toolName`
 
-### MCP (optional)
+### MCP (explicit separate mode)
+
+MCP is a separate, explicit compatibility mode. CLI and API execute tooling directly in-process and do not route through MCP.
 
 ```bash
 nostr-agent-interface mcp
@@ -189,6 +197,7 @@ Primary env vars:
 10. `NOSTR_AGENT_API_MAX_BODY_BYTES` (optional; default `1048576`)
 11. `NOSTR_MCP_COMMAND`
 12. `NOSTR_MCP_ARGS`
+13. `NOSTR_NETWORK_TESTS` (`1` to run network/integration suites that require ephemeral relays or port binding)
 
 ## MCP Client Setup (Optional)
 
@@ -222,6 +231,7 @@ bun test __tests__/api-core.test.ts __tests__/api-errors.test.ts __tests__/api-a
 bun test __tests__/mcp-dispatch.test.ts
 bun test __tests__/zap-tools-tests.test.ts
 bun run check:docs
+NOSTR_NETWORK_TESTS=1 bun test
 ```
 
 Detailed suite coverage and troubleshooting by surface: `docs/testing.md`.

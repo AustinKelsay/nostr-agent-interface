@@ -3,6 +3,7 @@ import { NostrRelay } from '../utils/ephemeral-relay.js';
 import { schnorr } from '@noble/curves/secp256k1';
 import { randomBytes } from 'node:crypto';
 import { sha256 } from '@noble/hashes/sha256';
+import { describeNetwork } from "./support/network-suite.js";
 
 // Generate a keypair for testing
 function generatePrivateKey(): string {
@@ -43,7 +44,7 @@ function createSignedEvent(privateKey: string, kind: number, content: string, ta
   };
 }
 
-describe('Nostr Integration Tests', () => {
+describeNetwork('Nostr Integration Tests', () => {
   let relay: NostrRelay;
   let privateKey: string;
   let publicKey: string;

@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { NostrRelay } from "../utils/ephemeral-relay.js";
 import { schnorr } from "@noble/curves/secp256k1";
+import { describeNetwork } from "./support/network-suite.js";
 
 import { createNostrEvent, publishNostrEvent, signNostrEvent } from "../event/event-tools.js";
 import {
@@ -13,7 +14,7 @@ import {
   replyToEvent,
 } from "../social/social-tools.js";
 
-describe("social-tools", () => {
+describeNetwork("social-tools", () => {
   let relay: NostrRelay;
   let relayUrl: string;
 
