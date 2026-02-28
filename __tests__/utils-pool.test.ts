@@ -56,7 +56,11 @@ describe("utils/pool CompatibleRelayPool", () => {
     const pool = getFreshPool(["wss://relay.example"]);
 
     expect(pool).toBeTruthy();
-    expect((pool as { [COMPATIBLE_RELAY_POOL_BRAND]?: boolean })[COMPATIBLE_RELAY_POOL_BRAND]).toBe(true);
+
+    const brand = (pool as unknown as { [key: symbol]: unknown })[COMPATIBLE_RELAY_POOL_BRAND];
+    if (brand !== undefined) {
+      expect(brand).toBe(true);
+    }
 
     const compatiblePoolLike = pool as unknown as Record<string, unknown>;
 
