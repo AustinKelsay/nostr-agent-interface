@@ -6,28 +6,6 @@ import { QUERY_TIMEOUT } from "./constants.js";
  * Extended RelayPool with compatibility methods for existing codebase
  */
 export class CompatibleRelayPool {
-  static [Symbol.hasInstance](value: unknown): boolean {
-    if (!value || typeof value !== "object") {
-      return false;
-    }
-
-    const candidate = value as {
-      get?: unknown;
-      getMany?: unknown;
-      querySync?: unknown;
-      close?: unknown;
-      [Symbol.toStringTag]?: unknown;
-    };
-
-    return (
-      candidate[Symbol.toStringTag] === "CompatibleRelayPool" &&
-      typeof candidate.get === "function" &&
-      typeof candidate.getMany === "function" &&
-      typeof candidate.querySync === "function" &&
-      typeof candidate.close === "function"
-    );
-  }
-
   private readonly relayPool: RelayPool;
 
   private readonly defaultQueryTimeoutMs: number;
@@ -35,10 +13,6 @@ export class CompatibleRelayPool {
   constructor(relays: string[] = []) {
     this.relayPool = new RelayPool(relays);
     this.defaultQueryTimeoutMs = QUERY_TIMEOUT;
-  }
-
-  get [Symbol.toStringTag]() {
-    return "CompatibleRelayPool";
   }
 
   querySync(
