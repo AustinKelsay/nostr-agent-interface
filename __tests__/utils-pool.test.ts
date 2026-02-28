@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { RelayPool } from "snstr";
 import { QUERY_TIMEOUT } from "../utils/constants.js";
 import { type NostrEvent } from "../utils/pool.js";
-import { CompatibleRelayPool, getFreshPool } from "../utils/pool.js";
+import { COMPATIBLE_RELAY_POOL_BRAND, CompatibleRelayPool, getFreshPool } from "../utils/pool.js";
 
 describe("utils/pool CompatibleRelayPool", () => {
   const makeEvent = (id: string): NostrEvent => ({
@@ -56,15 +56,16 @@ describe("utils/pool CompatibleRelayPool", () => {
     const pool = getFreshPool(["wss://relay.example"]);
 
     expect(pool).toBeTruthy();
+    expect((pool as { [COMPATIBLE_RELAY_POOL_BRAND]?: boolean })[COMPATIBLE_RELAY_POOL_BRAND]).toBe(true);
 
     const compatiblePoolLike = pool as unknown as Record<string, unknown>;
 
     // In some Bun/VM executions, class identity can differ when modules are loaded
     // through different runtime paths, so validate runtime contract instead of strict
     // instanceof checks.
-    for (const method of ["get", "getMany", "close"] as const) {
-      expect(method in compatiblePoolLike).toBe(true);
-    }
+    expect(typeof compatiblePoolLike.get).toBe("function");
+    expect(typeof compatiblePoolLike.getMany).toBe("function");
+    expect(typeof compatiblePoolLike.close).toBe("function");
   });
 
   test("get returns first event when querySync has results", async () => {
