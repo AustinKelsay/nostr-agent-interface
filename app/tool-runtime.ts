@@ -6,6 +6,7 @@ type ToolDefinition = {
   name: string;
   description?: string;
   inputSchema?: unknown;
+  canonicalInputSchema?: unknown;
   handler?: (params: Record<string, unknown>, extras: unknown) => Promise<unknown>;
 };
 
@@ -131,17 +132,18 @@ function normalizeToolInputSchema(inputSchema: unknown): unknown {
   return inputSchema;
 }
 
-function normalizeToolDefinition(tool: NostrToolRegistration): NostrToolRegistration {
+function normalizeToolDefinition(tool: NostrToolRegistration): ToolDefinition {
   const normalizedSchema = normalizeToolInputSchema(tool.inputSchema) as NostrToolRegistration["inputSchema"];
 
   return {
     ...tool,
+    canonicalInputSchema: tool.inputSchema,
     inputSchema: normalizedSchema,
   };
 }
 
 async function createInProcessToolRuntimeInternal(): Promise<ToolRuntime> {
-  const toolMap = new Map<string, NostrToolRegistration>();
+  const toolMap = new Map<string, ToolDefinition>();
 
   createNostrMcpServer((tool) => {
     if (typeof tool.handler === "function" && tool.name) {
@@ -173,8 +175,20 @@ async function createInProcessToolRuntimeInternal(): Promise<ToolRuntime> {
         };
       }
 
+      if (typeof tool.handler !== "function") {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: `No handler registered for tool: ${toolName}`,
+            },
+          ],
+        };
+      }
+
       try {
-        const schema = buildArgumentSchema(tool.inputSchema);
+        const schema = buildArgumentSchema(tool.canonicalInputSchema ?? tool.inputSchema);
         if (schema) {
           const validation = schema.safeParse(args);
           if (!validation.success) {

@@ -330,35 +330,66 @@ export function createNostrMcpServer(onToolRegister?: (tool: NostrToolRegistrati
 
   const originalToolRegistration = (server as any).tool.bind(server);
   if (onToolRegister) {
+    const isObject = (value: unknown): value is Record<string, unknown> =>
+      typeof value === "object" && value !== null && !Array.isArray(value);
+
+    const looksLikeZodShape = (value: Record<string, unknown>): boolean => {
+      const keys = Object.keys(value);
+      if (keys.length === 0) {
+        return false;
+      }
+
+      return keys.every((key) => isObject(value[key]) && "_def" in value[key]);
+    };
+
+    const looksLikeInputSchema = (value: unknown): value is NostrToolRegistration["inputSchema"] =>
+      isObject(value) &&
+      ("_def" in value || "properties" in value || "type" in value || looksLikeZodShape(value));
+
     (server as unknown as { tool: (...args: unknown[]) => unknown }).tool = (...args: unknown[]) => {
       const [name] = args;
       let description: string | undefined;
       let inputSchema: NostrToolRegistration["inputSchema"] = {};
       let handler: NostrToolRegistration["handler"] | undefined;
 
-      if (typeof name === "string") {
-        if (args.length === 2) {
-          const [, callback] = args;
-          if (typeof callback === "function") {
-            handler = callback as NostrToolRegistration["handler"];
-          }
-        } else if (args.length === 3) {
-          const [, second, third] = args;
-          if (typeof second === "string" && typeof third === "function") {
-            description = second;
-            handler = third as NostrToolRegistration["handler"];
-          } else if (typeof third === "function") {
-            inputSchema = (second ?? {}) as NostrToolRegistration["inputSchema"];
-            handler = third as NostrToolRegistration["handler"];
-          }
-        } else if (args.length >= 4) {
-          const [, second, third, fourth] = args;
+      if (typeof args[args.length - 1] === "function") {
+        handler = args[args.length - 1] as NostrToolRegistration["handler"];
+      }
+
+      if (typeof name === "string" && typeof handler === "function") {
+        const argsSansHandler = args.slice(0, args.length - 1);
+
+        if (argsSansHandler.length === 2) {
+          // [name, handler] or [name, description]
+          const [, second] = argsSansHandler;
           if (typeof second === "string") {
             description = second;
+          } else if (looksLikeInputSchema(second)) {
+            inputSchema = second;
           }
-          inputSchema = (third ?? {}) as NostrToolRegistration["inputSchema"];
-          if (typeof fourth === "function") {
-            handler = fourth as NostrToolRegistration["handler"];
+        } else if (argsSansHandler.length === 3) {
+          // [name, description, inputSchema]
+          // [name, inputSchema, annotations]
+          const [, second, third] = argsSansHandler;
+          if (typeof second === "string") {
+            description = second;
+            if (looksLikeInputSchema(third)) {
+              inputSchema = third;
+            }
+          } else if (looksLikeInputSchema(second)) {
+            inputSchema = second;
+          }
+        } else if (argsSansHandler.length === 4) {
+          // [name, description, inputSchema, annotations]
+          // [name, inputSchema, annotations, ???]
+          const [, second, third] = argsSansHandler;
+          if (typeof second === "string") {
+            description = second;
+            if (looksLikeInputSchema(third)) {
+              inputSchema = third;
+            }
+          } else if (looksLikeInputSchema(second)) {
+            inputSchema = second;
           }
         }
       }

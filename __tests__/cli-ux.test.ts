@@ -8,6 +8,14 @@ type ProcessResult = {
   stderr: string;
 };
 
+function assertCleanListToolsOutput(result: ProcessResult) {
+  expect(result.code).toBe(0);
+  expect(result.stderr).toBe("");
+
+  const parsed = JSON.parse(result.stdout.trim());
+  expect(Array.isArray(parsed.tools)).toBe(true);
+}
+
 function runCliProcess(
   args: string[],
   env?: Record<string, string | undefined>,
@@ -111,23 +119,14 @@ describe("CLI UX", () => {
 
   test("emits clean list-tools --json output with no stderr", async () => {
     const result = await runCliProcess(["list-tools", "--json"]);
-
-    expect(result.code).toBe(0);
-    expect(result.stderr).toBe("");
-
-    const parsed = JSON.parse(result.stdout.trim());
-    expect(Array.isArray(parsed.tools)).toBe(true);
+    assertCleanListToolsOutput(result);
   });
 
   test("supports NOSTR_JSON_ONLY for clean machine output", async () => {
     const result = await runCliProcess(["list-tools", "--json"], {
       NOSTR_JSON_ONLY: "true",
     });
-
-    expect(result.code).toBe(0);
-    expect(result.stderr).toBe("");
-    const parsed = JSON.parse(result.stdout.trim());
-    expect(Array.isArray(parsed.tools)).toBe(true);
+    assertCleanListToolsOutput(result);
   });
 
   test("supports direct tool help", async () => {
