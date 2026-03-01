@@ -10,7 +10,7 @@
         "@noble/hashes": "^1.7.2",
         "@scure/base": "^1.2.4",
         "light-bolt11-decoder": "^3.2.0",
-        "snstr": "^0.3.1",
+        "snstr": "^0.3.2",
         "ws": "^8.16.1",
         "zod": "^3.24.2",
       },
@@ -219,7 +219,7 @@
 
     "side-channel-weakmap": ["side-channel-weakmap@1.0.2", "", { "dependencies": { "call-bound": "^1.0.2", "es-errors": "^1.3.0", "get-intrinsic": "^1.2.5", "object-inspect": "^1.13.3", "side-channel-map": "^1.0.1" } }, "sha512-WPS/HvHQTYnHisLo9McqBHOJk2FkHO/tlpvldyrnem4aeQp4hai3gythswg6p01oSoTl58rcpiFAjF2br2Ak2A=="],
 
-    "snstr": ["snstr@0.3.1", "", { "dependencies": { "@noble/ciphers": "^0.4.1", "@noble/curves": "^1.8.1", "@noble/hashes": "^1.3.3", "@scure/base": "^1.2.4", "crypto-js": "^4.2.0", "light-bolt11-decoder": "^3.2.0", "websocket-polyfill": "^0.0.3", "ws": "^8.15.1", "zod": "^3.22.4" } }, "sha512-uuY+6tMfk7oJ/0UDtKNnJiGbAIgyrfLLvKsTP7nc9PRcqMC67OEl8Q+J0rWxPFlbLlJnovNTkm6ScQyNlL2B2g=="],
+    "snstr": ["snstr@0.3.2", "", { "dependencies": { "@noble/ciphers": "^0.4.1", "@noble/curves": "^1.8.1", "@noble/hashes": "^1.3.3", "@scure/base": "^1.2.4", "crypto-js": "^4.2.0", "light-bolt11-decoder": "^3.2.0", "websocket-polyfill": "^0.0.3", "ws": "^8.15.1", "zod": "^3.22.4" } }, "sha512-0L+PFELzLvcn7VxDXS+WilPAXJPBIleIDlUqukGgrdHtt425bDxItuu106C6NQBOCHt49vTgIsgMnRKzUM59sQ=="],
 
     "statuses": ["statuses@2.0.2", "", {}, "sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw=="],
 
