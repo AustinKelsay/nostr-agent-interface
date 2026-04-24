@@ -18,7 +18,7 @@
       "api"
     ]
   },
-  "toolCount": 48,
+  "toolCount": 51,
   "tools": [
     {
       "name": "analyzeNip19",
@@ -84,6 +84,90 @@
         "required": [
           "input",
           "targetType"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "createAttestation",
+      "description": "Create and publish a Kind 30085 reputation attestation for another Nostr pubkey. Requires your private key for signing. Self-attestations are rejected.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "privateKey": {
+            "type": "string",
+            "description": "Your private key (hex or nsec) for signing"
+          },
+          "subjectPubkey": {
+            "type": "string",
+            "description": "Subject's public key (hex or npub)"
+          },
+          "context": {
+            "type": "string",
+            "description": "Context namespace (e.g., 'reliability', 'code.review')"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Rating from 1 (poor) to 5 (excellent)"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Confidence level from 0.0 to 1.0"
+          },
+          "commitmentClass": {
+            "type": "string",
+            "enum": [
+              "self_assertion",
+              "social_endorsement",
+              "computational_proof",
+              "time_lock",
+              "economic_settlement"
+            ],
+            "default": "self_assertion",
+            "description": "Commitment class (higher = more Sybil-resistant)"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional evidence strings"
+          },
+          "expirationDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365,
+            "default": 180,
+            "description": "Days until expiration"
+          },
+          "halfLifeClass": {
+            "type": "string",
+            "enum": [
+              "slow",
+              "standard",
+              "fast"
+            ],
+            "description": "Decay speed: slow (180d), standard (90d), fast (30d)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to publish to"
+          }
+        },
+        "required": [
+          "privateKey",
+          "subjectPubkey",
+          "context",
+          "rating",
+          "confidence"
         ],
         "additionalProperties": false,
         "$schema": "http://json-schema.org/draft-07/schema#"
@@ -625,6 +709,42 @@
       }
     },
     {
+      "name": "getAttestations",
+      "description": "Get raw Kind 30085 reputation attestations for a Nostr pubkey. Shows individual attestations with rating, context, confidence, commitment class, and evidence.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pubkey": {
+            "type": "string",
+            "description": "Public key of the subject (hex or npub)"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20,
+            "description": "Maximum attestations to fetch"
+          },
+          "context": {
+            "type": "string",
+            "description": "Filter by context namespace"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
       "name": "getBlossomServers",
       "description": "Fetch a user's Blossom server list (kind 10063)",
       "inputSchema": {
@@ -1022,6 +1142,51 @@
           "authPrivateKey": {
             "type": "string",
             "description": "Optional private key (hex or nsec) used to AUTH (NIP-42) if relays require it"
+          }
+        },
+        "required": [
+          "pubkey"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    },
+    {
+      "name": "getReputation",
+      "description": "Get the reputation score for a Nostr pubkey based on Kind 30085 attestations. Returns weighted score with temporal decay, attestation count, and attestor diversity metrics.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pubkey": {
+            "type": "string",
+            "description": "Public key of the subject to check (hex or npub)"
+          },
+          "context": {
+            "type": "string",
+            "description": "Filter by context namespace (e.g., 'reliability', 'code.review')"
+          },
+          "decayType": {
+            "type": "string",
+            "enum": [
+              "exponential",
+              "gaussian"
+            ],
+            "default": "exponential",
+            "description": "Decay type: 'exponential' (long-tail) or 'gaussian' (aggressive drop-off)"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 100,
+            "description": "Maximum attestations to fetch for scoring (default 100)"
+          },
+          "relays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of relays to query"
           }
         },
         "required": [

@@ -97,6 +97,16 @@ import {
   mirrorBlob
 } from "./blossom/blossom-tools.js";
 import {
+  getReputationToolConfig,
+  getReputation,
+  getAttestationsToolConfig,
+  getAttestations,
+  createAttestationToolConfig,
+  createReputationAttestation,
+  formatReputationSummary,
+  formatAttestationsList,
+} from "./reputation/reputation-tools.js";
+import {
   getContactListToolConfig,
   getContactList,
   getFollowingToolConfig,
@@ -2142,6 +2152,69 @@ server.tool(
     return {
       content: [{ type: "text", text: result.message }],
     };
+  },
+);
+
+// Register reputation tools (Kind 30085 — NIP-XX Agent Reputation Attestations)
+server.tool(
+  "getReputation",
+  "Get the reputation score for a Nostr pubkey based on Kind 30085 attestations. Returns weighted score with temporal decay, attestation count, and attestor diversity metrics.",
+  getReputationToolConfig,
+  async ({ pubkey, context, decayType, limit, relays }) => {
+    const res = await getReputation({ pubkey, context, decayType, limit, relays });
+    if (!res.success) return { content: [{ type: "text", text: res.message }] };
+
+    const hexPubkey = npubToHex(pubkey) || pubkey;
+    const summary = formatReputationSummary({
+      pubkey: hexPubkey,
+      score: res.score || 0,
+      count: res.count || 0,
+      diversity: res.diversity || { entropy: 0, herfindahl: 1, uniqueCount: 0 },
+      context,
+      decayType: decayType || "exponential",
+    });
+
+    return { content: [{ type: "text", text: summary }] };
+  },
+);
+
+server.tool(
+  "getAttestations",
+  "Get raw Kind 30085 reputation attestations for a Nostr pubkey. Shows individual attestations with rating, context, confidence, commitment class, and evidence.",
+  getAttestationsToolConfig,
+  async ({ pubkey, limit, context, relays }) => {
+    const res = await getAttestations({ pubkey, limit, context, relays });
+    if (!res.success) return { content: [{ type: "text", text: res.message }] };
+
+    const attestations = res.attestations || [];
+    if (attestations.length === 0) {
+      return { content: [{ type: "text", text: res.message }] };
+    }
+
+    return {
+      content: [{ type: "text", text: `${res.message}\n\n${formatAttestationsList(attestations)}` }],
+    };
+  },
+);
+
+server.tool(
+  "createAttestation",
+  "Create and publish a Kind 30085 reputation attestation for another Nostr pubkey. Requires your private key for signing. Self-attestations are rejected.",
+  createAttestationToolConfig,
+  async ({ privateKey, subjectPubkey, context, rating, confidence, commitmentClass, evidence, expirationDays, halfLifeClass, relays }) => {
+    const res = await createReputationAttestation({
+      privateKey,
+      subjectPubkey,
+      context,
+      rating,
+      confidence,
+      commitmentClass,
+      evidence,
+      expirationDays,
+      halfLifeClass,
+      relays,
+    });
+    return { content: [{ type: "text", text: res.message }] };
   },
 );
 
