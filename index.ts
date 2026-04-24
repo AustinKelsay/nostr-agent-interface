@@ -2160,8 +2160,8 @@ server.tool(
   "getReputation",
   "Get the reputation score for a Nostr pubkey based on Kind 30085 attestations. Returns weighted score with temporal decay, attestation count, and attestor diversity metrics.",
   getReputationToolConfig,
-  async ({ pubkey, context, decayType, relays }) => {
-    const res = await getReputation({ pubkey, context, decayType, relays });
+  async ({ pubkey, context, decayType, limit, relays }) => {
+    const res = await getReputation({ pubkey, context, decayType, limit, relays });
     if (!res.success) return { content: [{ type: "text", text: res.message }] };
 
     const hexPubkey = npubToHex(pubkey) || pubkey;

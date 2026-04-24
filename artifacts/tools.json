@@ -1174,6 +1174,13 @@
             "default": "exponential",
             "description": "Decay type: 'exponential' (long-tail) or 'gaussian' (aggressive drop-off)"
           },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 100,
+            "description": "Maximum attestations to fetch for scoring (default 100)"
+          },
           "relays": {
             "type": "array",
             "items": {

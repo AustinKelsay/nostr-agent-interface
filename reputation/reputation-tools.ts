@@ -49,6 +49,7 @@ export const getReputationToolConfig = {
   context: z.string().optional().describe("Filter by context namespace (e.g., 'reliability', 'code.review')"),
   decayType: z.enum(["exponential", "gaussian"]).default("exponential")
     .describe("Decay type: 'exponential' (long-tail) or 'gaussian' (aggressive drop-off)"),
+  limit: z.number().min(1).max(500).default(100).describe("Maximum attestations to fetch for scoring (default 100)"),
   relays: z.array(z.string()).optional().describe("Optional list of relays to query"),
 };
 
@@ -237,6 +238,7 @@ export async function getReputation(params: {
   pubkey: string;
   context?: string;
   decayType?: string;
+  limit?: number;
   relays?: string[];
 }): Promise<{
   success: boolean;
@@ -260,7 +262,7 @@ export async function getReputation(params: {
     const filter: any = {
       kinds: [KIND_REPUTATION],
       "#p": [hexPubkey],
-      limit: 100,
+      limit: params.limit || 100,
     };
 
     if (params.context) {
@@ -471,12 +473,10 @@ export async function createReputationAttestation(params: {
 
     let successCount = 0;
     if (Array.isArray(results)) {
-      for (const r of results) {
-        try {
-          const res = await (r as any);
-          if (res) successCount++;
-        } catch {
-          // relay rejected
+      const settled = await Promise.allSettled(results as Promise<unknown>[]);
+      for (const r of settled) {
+        if (r.status === "fulfilled" && (r.value as any)?.success === true) {
+          successCount++;
         }
       }
     }
